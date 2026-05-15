@@ -3,9 +3,9 @@
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
   "version": "1.0.0",
-  "publisher": "Azura",
+  "publisher": "AzuraLight",
   "author": {
-    "name": "Azura"
+    "name": "AzuraLight"
   },
   "license": "MIT",
   "icon": "media/icon.png",
