@@ -1,0 +1,9 @@
+{
+  "extension.displayName": "Gitline",
+  "extension.description": "Git visualization: commit graph in the panel.",
+  "command.openCommitGraph.title": "Gitline: Open Commit Panel",
+  "command.openFileHistory.title": "Gitline: File History",
+  "viewContainer.panel.title": "Gitline",
+  "view.panel.name": "Gitline",
+  "view.panel.contextualTitle": "Gitline"
+}

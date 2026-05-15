@@ -1,0 +1,113 @@
+{
+  "name": "gitline",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "1.0.0",
+  "publisher": "Azura",
+  "author": {
+    "name": "Azura"
+  },
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "l10n": "./l10n",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AzuraLight/gitline.git"
+  },
+  "homepage": "https://github.com/AzuraLight/gitline#readme",
+  "bugs": {
+    "url": "https://github.com/AzuraLight/gitline/issues"
+  },
+  "keywords": [
+    "git",
+    "git graph",
+    "commit graph",
+    "gitlens",
+    "history",
+    "branch",
+    "log",
+    "diff",
+    "stash"
+  ],
+  "extensionKind": ["ui"],
+  "extensionDependencies": ["vscode.git"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["SCM Providers", "Visualization"],
+  "galleryBanner": {
+    "color": "#3178c6",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "workspaceContains:.git/HEAD",
+    "workspaceContains:**/.git/HEAD"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "gitline.openCommitGraph",
+        "title": "%command.openCommitGraph.title%",
+        "category": "Gitline",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "gitline.openFileHistory",
+        "title": "%command.openFileHistory.title%",
+        "category": "Gitline",
+        "icon": "$(history)"
+      }
+    ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "gitlinePanel",
+          "title": "%viewContainer.panel.title%",
+          "icon": "$(git-branch)"
+        }
+      ]
+    },
+    "views": {
+      "gitlinePanel": [
+        {
+          "type": "webview",
+          "id": "gitline.panel",
+          "name": "%view.panel.name%",
+          "contextualTitle": "%view.panel.contextualTitle%",
+          "icon": "$(git-branch)",
+          "initialSize": 4,
+          "visibility": "visible"
+        }
+      ]
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "gitline.openFileHistory",
+          "group": "navigation@8",
+          "when": "editorTextFocus && resourceScheme == file"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "gitline.openFileHistory",
+          "when": "resourceScheme == file",
+          "group": "gitline@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npm run compile && npx --yes @vscode/vsce@latest package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
