@@ -1,15 +1,18 @@
 import * as vscode from "vscode";
 import { buildCommitGraphShellHtml } from "./commitGraphView";
-import { commitFileUri, commitShowUri } from "./commitShowProvider";
+import { commitFileUri, commitShowUri, compareShowUri } from "./commitShowProvider";
 import {
   readBranchTreePayload,
   readCommitFiles,
+  readCompareFiles,
   readCurrentBranchName,
   readFirstParent,
   readRecentCommits,
   readStashes,
   readWorkingState,
+  revExists,
   runGitCommand,
+  type MergesMode,
 } from "./gitExec";
 import {
   createBranchFrom,
@@ -26,6 +29,14 @@ import {
   type StashActionId,
 } from "./gitPanelActions";
 import { getCommitGraphWebviewUi, getWebviewHtmlLang } from "./nls";
+import {
+  abortRebase,
+  isRebaseInProgress,
+  readRebaseCommits,
+  runInteractiveRebase,
+  type RebaseAction,
+  type RebaseTodoItem,
+} from "./rebaseRun";
 import { pickCommitGraphRepoRoot } from "./repoPick";
 
 let panelViewRef: vscode.WebviewView | undefined;
@@ -189,6 +200,7 @@ async function sendGraphPayload(
   rev?: string,
   pathFilter?: string,
   query?: string,
+  mergesMode?: MergesMode,
 ): Promise<void> {
   const root = await pickCommitGraphRepoRoot();
   if (!root) {
@@ -202,12 +214,21 @@ async function sendGraphPayload(
   try {
     const capped = Math.min(500, Math.max(1, limit));
     const trimmed = typeof rev === "string" ? rev.trim() : "";
-    const logRev = trimmed.length > 0 ? trimmed : undefined;
+    let logRev = trimmed.length > 0 ? trimmed : undefined;
+    // If a rev was selected but no longer resolves (deleted/renamed remote
+    // branch, or a typo), fall back to the default log and tell the webview so
+    // it can surface a notice and clear the stale selection — rather than
+    // failing the whole view with git's "unknown revision" fatal error.
+    let revMissing: string | undefined;
+    if (logRev && !(await revExists(root, logRev))) {
+      revMissing = logRev;
+      logRev = undefined;
+    }
     const pf = typeof pathFilter === "string" && pathFilter.trim().length > 0 ? pathFilter.trim() : undefined;
     const q = typeof query === "string" && query.trim().length > 0 ? query.trim() : undefined;
     const branch = await readCurrentBranchName(root);
     const [commits, branchTree, working, stashes] = await Promise.all([
-      readRecentCommits(root, capped, logRev, pf, q),
+      readRecentCommits(root, capped, logRev, pf, q, mergesMode),
       readBranchTreePayload(root),
       readWorkingState(root).catch(() => ({ staged: 0, modified: 0, untracked: 0, conflicted: 0 })),
       readStashes(root).catch(() => []),
@@ -218,6 +239,7 @@ async function sendGraphPayload(
         repoRoot: root,
         branch,
         viewRev: logRev ?? "",
+        revMissing: revMissing ?? "",
         pathFilter: pf ?? "",
         query: q ?? "",
         branchTree,
@@ -289,6 +311,144 @@ async function openStashFileDiff(ref: string, filePath: string, oldPath: string 
   const leftUri = commitFileUri(root, `${ref}^1`, before);
   const rightUri = commitFileUri(root, ref, filePath);
   const title = vscode.l10n.t("{0} ({1})", filePath, ref);
+  await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title, {
+    preview: true,
+    preserveFocus: true,
+  });
+}
+
+function isRebaseAction(s: unknown): s is RebaseAction {
+  return s === "pick" || s === "drop" || s === "squash" || s === "fixup";
+}
+
+async function sendRebaseCommits(webview: vscode.Webview, base: string): Promise<void> {
+  const root = await pickCommitGraphRepoRoot();
+  if (!root) return;
+  try {
+    if (isRebaseInProgress(root)) {
+      webview.postMessage({
+        type: "rebaseError",
+        message: vscode.l10n.t("A rebase is already in progress. Resolve or abort it first."),
+      });
+      return;
+    }
+    const commits = await readRebaseCommits(root, base);
+    webview.postMessage({ type: "rebaseCommits", base, commits });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    webview.postMessage({ type: "rebaseError", message: msg });
+  }
+}
+
+async function applyRebase(
+  webview: vscode.Webview,
+  base: string,
+  items: RebaseTodoItem[],
+): Promise<void> {
+  const root = await pickCommitGraphRepoRoot();
+  if (!root) return;
+  if (items.length === 0) {
+    webview.postMessage({ type: "rebaseError", message: vscode.l10n.t("Nothing to rebase.") });
+    return;
+  }
+  const keptOrSquashed = items.filter((i) => i.action !== "drop");
+  if (keptOrSquashed.length === 0 || keptOrSquashed[0].action !== "pick") {
+    webview.postMessage({
+      type: "rebaseError",
+      message: vscode.l10n.t("First non-dropped commit must be a 'pick' (cannot squash/fixup onto nothing)."),
+    });
+    return;
+  }
+  const yes = await confirm(
+    vscode.l10n.t("Rewrite {0} commit(s) with interactive rebase?", String(items.length)),
+    true,
+  );
+  if (!yes) return;
+  try {
+    await runInteractiveRebase(root, base, items);
+    webview.postMessage({ type: "rebaseDone" });
+    webview.postMessage({ type: "reloadNow" });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (isRebaseInProgress(root)) {
+      webview.postMessage({
+        type: "rebaseError",
+        message: vscode.l10n.t("Rebase paused (likely a conflict). Resolve in the SCM view, then continue or abort.\n{0}", msg),
+      });
+    } else {
+      webview.postMessage({ type: "rebaseError", message: msg });
+    }
+  }
+}
+
+async function abortRebaseAndReload(webview: vscode.Webview): Promise<void> {
+  const root = await pickCommitGraphRepoRoot();
+  if (!root) return;
+  if (!isRebaseInProgress(root)) {
+    webview.postMessage({ type: "rebaseDone" });
+    return;
+  }
+  const yes = await confirm(vscode.l10n.t("Abort the in-progress rebase?"), true);
+  if (!yes) return;
+  try {
+    await abortRebase(root);
+    webview.postMessage({ type: "rebaseDone" });
+    webview.postMessage({ type: "reloadNow" });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    webview.postMessage({ type: "rebaseError", message: msg });
+  }
+}
+
+async function sendCompareFiles(webview: vscode.Webview, a: string, b: string): Promise<void> {
+  const root = await pickCommitGraphRepoRoot();
+  if (!root) return;
+  try {
+    const files = await readCompareFiles(root, a, b);
+    webview.postMessage({ type: "compareFiles", a, b, files });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    webview.postMessage({ type: "compareFilesError", a, b, message: msg });
+  }
+}
+
+async function openComparePatch(a: string, b: string): Promise<void> {
+  const root = await pickCommitGraphRepoRoot();
+  if (!root) return;
+  const doc = await vscode.workspace.openTextDocument(compareShowUri(root, a, b));
+  await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: true });
+}
+
+async function openCompareFileDiff(
+  a: string,
+  b: string,
+  filePath: string,
+  status: string,
+  oldPath: string | undefined,
+): Promise<void> {
+  const root = await pickCommitGraphRepoRoot();
+  if (!root) return;
+  const sa = a.slice(0, 7);
+  const sb = b.slice(0, 7);
+  const title =
+    status === "R" && oldPath
+      ? vscode.l10n.t("{0} → {1} ({2}..{3})", oldPath, filePath, sa, sb)
+      : vscode.l10n.t("{0} ({1}..{2})", filePath, sa, sb);
+  let leftUri: vscode.Uri;
+  let rightUri: vscode.Uri;
+  if (status === "A") {
+    leftUri = commitFileUri(root, "", filePath);
+    rightUri = commitFileUri(root, b, filePath);
+  } else if (status === "D") {
+    leftUri = commitFileUri(root, a, filePath);
+    rightUri = commitFileUri(root, "", filePath);
+  } else if (status === "R" && oldPath) {
+    leftUri = commitFileUri(root, a, oldPath);
+    rightUri = commitFileUri(root, b, filePath);
+  } else {
+    leftUri = commitFileUri(root, a, filePath);
+    rightUri = commitFileUri(root, b, filePath);
+  }
   await vscode.commands.executeCommand("vscode.diff", leftUri, rightUri, title, {
     preview: true,
     preserveFocus: true,
@@ -407,13 +567,40 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
           status?: string;
           branch?: string;
           text?: string;
+          mergesMode?: string;
+          a?: string;
+          b?: string;
+          base?: string;
+          items?: Array<{ sha?: string; subject?: string; action?: string }>;
         }) => {
           if (msg?.type === "requestGraph") {
             const lim = typeof msg.limit === "number" ? msg.limit : 200;
             const r = typeof msg.rev === "string" ? msg.rev : undefined;
             const pf = typeof msg.pathFilter === "string" ? msg.pathFilter : undefined;
             const q = typeof msg.query === "string" ? msg.query : undefined;
-            void sendGraphPayload(webview, lim, r, pf, q);
+            const mm: MergesMode | undefined =
+              msg.mergesMode === "hide" || msg.mergesMode === "only" || msg.mergesMode === "all"
+                ? msg.mergesMode
+                : undefined;
+            void sendGraphPayload(webview, lim, r, pf, q, mm);
+            return;
+          }
+          if (msg?.type === "requestCompareFiles" && typeof msg.a === "string" && typeof msg.b === "string") {
+            void sendCompareFiles(webview, msg.a, msg.b);
+            return;
+          }
+          if (msg?.type === "openComparePatch" && typeof msg.a === "string" && typeof msg.b === "string") {
+            void openComparePatch(msg.a, msg.b);
+            return;
+          }
+          if (
+            msg?.type === "openCompareFileDiff" &&
+            typeof msg.a === "string" &&
+            typeof msg.b === "string" &&
+            typeof msg.path === "string" &&
+            typeof msg.status === "string"
+          ) {
+            void openCompareFileDiff(msg.a, msg.b, msg.path, msg.status, msg.oldPath);
             return;
           }
           if (msg?.type === "requestCommitFiles" && typeof msg.hash === "string") {
@@ -494,6 +681,33 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
           }
           if (msg?.type === "copyText" && typeof msg.text === "string") {
             void copyToClipboard(msg.text);
+            return;
+          }
+          if (msg?.type === "requestRebaseCommits" && typeof msg.base === "string") {
+            void sendRebaseCommits(webview, msg.base);
+            return;
+          }
+          if (
+            msg?.type === "applyRebase" &&
+            typeof msg.base === "string" &&
+            Array.isArray(msg.items)
+          ) {
+            const items: RebaseTodoItem[] = [];
+            for (const raw of msg.items) {
+              if (
+                raw &&
+                typeof raw.sha === "string" &&
+                typeof raw.subject === "string" &&
+                isRebaseAction(raw.action)
+              ) {
+                items.push({ sha: raw.sha, subject: raw.subject, action: raw.action });
+              }
+            }
+            void applyRebase(webview, msg.base, items);
+            return;
+          }
+          if (msg?.type === "abortRebase") {
+            void abortRebaseAndReload(webview);
             return;
           }
         },

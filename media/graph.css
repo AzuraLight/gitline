@@ -481,6 +481,244 @@ body.gv-commit-body.gv-in-panel {
   display: none !important;
 }
 
+.gv-shell .gv-merge-toggle {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 6px;
+}
+
+.gv-shell .gv-merge-toggle__btn {
+  font-family: var(--gv-font-mono);
+  font-size: 0.78em;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--gv-line);
+  color: var(--gv-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.gv-shell .gv-merge-toggle__btn:hover {
+  color: var(--vscode-foreground);
+  border-color: color-mix(in srgb, var(--gv-accent) 40%, var(--gv-line));
+}
+
+.gv-shell .gv-merge-toggle__btn[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--gv-accent) 20%, transparent);
+  border-color: color-mix(in srgb, var(--gv-accent) 50%, transparent);
+  color: var(--vscode-foreground);
+}
+
+.gv-shell .gv-rev-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  padding: 6px 8px 6px 10px;
+  border-radius: 6px;
+  font-size: 0.82em;
+  background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #f0883e) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-editorWarning-foreground, #f0883e) 45%, transparent);
+  color: var(--vscode-foreground);
+}
+
+.gv-shell .gv-rev-notice[hidden] {
+  display: none !important;
+}
+
+.gv-shell .gv-rev-notice__icon {
+  color: var(--vscode-editorWarning-foreground, #f0883e);
+  flex: 0 0 auto;
+}
+
+.gv-shell .gv-rev-notice__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.gv-shell .gv-rev-notice__close {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--gv-muted);
+  cursor: pointer;
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.gv-shell .gv-rev-notice__close:hover {
+  background: color-mix(in srgb, var(--vscode-foreground) 18%, transparent);
+}
+
+.gv-shell .gv-compare-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-weight: 500;
+  background: color-mix(in srgb, #f0883e 18%, transparent);
+  border: 1px solid color-mix(in srgb, #f0883e 50%, transparent);
+  color: var(--vscode-foreground);
+}
+
+.gv-shell .gv-compare-chip[hidden] {
+  display: none !important;
+}
+
+.gv-shell .gv-compare-chip__label {
+  font-family: var(--gv-font-mono);
+  font-size: 0.95em;
+}
+
+.gv-shell .gv-compare-chip__exit {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--gv-muted);
+  cursor: pointer;
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.gv-shell .gv-compare-chip__exit:hover {
+  background: color-mix(in srgb, var(--vscode-errorForeground) 30%, transparent);
+  color: var(--vscode-foreground);
+}
+
+.gv-shell .gv-unified-row--marked {
+  box-shadow: inset 3px 0 0 #f0883e;
+}
+
+.gv-shell .gv-rebase-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.gv-shell .gv-rebase-row {
+  display: grid;
+  grid-template-columns: 84px 64px 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.gv-shell .gv-rebase-row:hover {
+  background: color-mix(in srgb, var(--gv-accent) 8%, transparent);
+}
+
+.gv-shell .gv-rebase-row--drop {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.gv-shell .gv-rebase-row--squash,
+.gv-shell .gv-rebase-row--fixup {
+  background: color-mix(in srgb, #f0883e 10%, transparent);
+}
+
+.gv-shell .gv-rebase-select {
+  font-family: var(--gv-font-mono);
+  font-size: 0.85em;
+  padding: 2px 4px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--gv-line);
+  border-radius: 3px;
+}
+
+.gv-shell .gv-rebase-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: 0.9em;
+}
+
+.gv-shell .gv-rebase-move {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--gv-line);
+  border-radius: 3px;
+  color: var(--gv-muted);
+  cursor: pointer;
+  font-size: 0.7em;
+}
+
+.gv-shell .gv-rebase-move:hover:not(:disabled) {
+  color: var(--vscode-foreground);
+  border-color: color-mix(in srgb, var(--gv-accent) 40%, var(--gv-line));
+}
+
+.gv-shell .gv-rebase-move:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.gv-shell .gv-rebase-actions {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--gv-line);
+}
+
+.gv-shell .gv-rebase-btn {
+  padding: 4px 12px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--gv-line);
+  color: var(--vscode-foreground);
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.gv-shell .gv-rebase-btn:hover {
+  border-color: color-mix(in srgb, var(--gv-accent) 50%, var(--gv-line));
+}
+
+.gv-shell .gv-rebase-btn--primary {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border-color: var(--vscode-button-background);
+}
+
+.gv-shell .gv-rebase-btn--primary:hover {
+  background: var(--vscode-button-hoverBackground);
+  border-color: var(--vscode-button-hoverBackground);
+}
+
+.gv-shell .gv-rebase-btn--danger {
+  margin-left: auto;
+  color: var(--vscode-errorForeground);
+  border-color: color-mix(in srgb, var(--vscode-errorForeground) 40%, var(--gv-line));
+}
+
 .gv-shell .gv-path-filter__icon {
   opacity: 0.85;
   flex-shrink: 0;

@@ -58,11 +58,24 @@ export function buildCommitGraphShellHtml(
         <input id="search-input" type="text" class="gv-search__input" placeholder="${escapeHtml(ui.searchPlaceholder)}" autocomplete="off" spellcheck="false" />
         <button type="button" id="btn-clear-search" class="gv-search__clear" hidden title="${escapeHtml(ui.searchClearTitle)}" aria-label="${escapeHtml(ui.searchClearTitle)}">✕</button>
       </div>
+      <div class="gv-merge-toggle" role="group" aria-label="merges">
+        <button type="button" id="btn-hide-merges" class="gv-merge-toggle__btn" title="${escapeHtml(ui.hideMergesTitle)}" aria-pressed="false">⊘M</button>
+        <button type="button" id="btn-only-merges" class="gv-merge-toggle__btn" title="${escapeHtml(ui.onlyMergesTitle)}" aria-pressed="false">⊕M</button>
+      </div>
+      <div id="compare-chip" class="gv-compare-chip" hidden>
+        <span class="gv-compare-chip__label" id="compare-chip-label"></span>
+        <button type="button" id="btn-exit-compare" class="gv-compare-chip__exit" title="${escapeHtml(ui.exitCompareTitle)}" aria-label="${escapeHtml(ui.exitCompareTitle)}">✕</button>
+      </div>
       <div id="path-filter" class="gv-path-filter" hidden>
         <span class="gv-path-filter__icon" aria-hidden="true">📄</span>
         <span id="path-filter-label" class="gv-path-filter__label"></span>
         <button type="button" id="btn-clear-path" class="gv-path-filter__clear" title="${escapeHtml(ui.clearFilterTitle)}" aria-label="${escapeHtml(ui.clearFilterTitle)}">✕</button>
       </div>
+    </div>
+    <div id="rev-notice" class="gv-rev-notice" hidden role="status" aria-live="polite">
+      <span class="gv-rev-notice__icon" aria-hidden="true">⚠</span>
+      <span id="rev-notice-text" class="gv-rev-notice__text"></span>
+      <button type="button" id="btn-dismiss-notice" class="gv-rev-notice__close" title="${escapeHtml(ui.dismissNoticeTitle)}" aria-label="${escapeHtml(ui.dismissNoticeTitle)}">✕</button>
     </div>
   </header>
   <main class="gv-panel-main gv-workspace-root">
@@ -137,6 +150,14 @@ function getPanelClientScript(): string {
   var btnClearPath = document.getElementById("btn-clear-path");
   var searchInput = document.getElementById("search-input");
   var btnClearSearch = document.getElementById("btn-clear-search");
+  var btnHideMerges = document.getElementById("btn-hide-merges");
+  var btnOnlyMerges = document.getElementById("btn-only-merges");
+  var compareChip = document.getElementById("compare-chip");
+  var compareChipLabel = document.getElementById("compare-chip-label");
+  var btnExitCompare = document.getElementById("btn-exit-compare");
+  var revNotice = document.getElementById("rev-notice");
+  var revNoticeText = document.getElementById("rev-notice-text");
+  var btnDismissNotice = document.getElementById("btn-dismiss-notice");
   if (!root || !detail || !graphWorkspace || !emptyState) return;
 
   var state = vscode.getState() || {};
@@ -144,12 +165,59 @@ function getPanelClientScript(): string {
   var selectedRev = typeof state.selectedRev === "string" ? state.selectedRev : "";
   var pathFilter = typeof state.pathFilter === "string" ? state.pathFilter : "";
   var query = typeof state.query === "string" ? state.query : "";
+  var mergesMode = state.mergesMode === "hide" || state.mergesMode === "only" ? state.mergesMode : "all";
+  var markedHash = typeof state.markedHash === "string" ? state.markedHash : "";
+  var compareTarget = ""; // when set, files list is rendering compare files between markedHash and this
   var currentHash = "";
   var scrollHandlerRef = { fn: null };
   var renderCommitFilesRef = null;
 
   function saveState() {
-    vscode.setState({ selectedRev: selectedRev, pathFilter: pathFilter, query: query });
+    vscode.setState({
+      selectedRev: selectedRev,
+      pathFilter: pathFilter,
+      query: query,
+      mergesMode: mergesMode,
+      markedHash: markedHash,
+    });
+  }
+
+  function applyMergesUi() {
+    if (btnHideMerges) btnHideMerges.setAttribute("aria-pressed", mergesMode === "hide" ? "true" : "false");
+    if (btnOnlyMerges) btnOnlyMerges.setAttribute("aria-pressed", mergesMode === "only" ? "true" : "false");
+  }
+
+  function showRevNotice(missingRev) {
+    if (!revNotice) return;
+    if (revNoticeText) {
+      var tmpl = UI.revMissingNotice || "“{0}” no longer exists — showing the default history instead.";
+      revNoticeText.textContent = tmpl.replace("{0}", missingRev);
+    }
+    revNotice.removeAttribute("hidden");
+  }
+
+  function hideRevNotice() {
+    if (revNotice) revNotice.setAttribute("hidden", "");
+  }
+
+  function applyCompareChip() {
+    if (!compareChip) return;
+    if (markedHash) {
+      if (compareChipLabel) {
+        compareChipLabel.textContent = (UI.comparingLabel || "Comparing") + " " + markedHash.slice(0, 7);
+      }
+      compareChip.removeAttribute("hidden");
+    } else {
+      compareChip.setAttribute("hidden", "");
+    }
+    // Refresh row marks on currently rendered rows.
+    document.querySelectorAll(".gv-unified-row").forEach(function (el) {
+      if (markedHash && el.dataset && el.dataset.hash === markedHash) {
+        el.classList.add("gv-unified-row--marked");
+      } else {
+        el.classList.remove("gv-unified-row--marked");
+      }
+    });
   }
 
   function setStatus(_t) {}
@@ -233,7 +301,7 @@ function getPanelClientScript(): string {
   }
 
   function ctxForCommit(c, x, y) {
-    showCtx(x, y, [
+    var items = [
       { label: "Checkout (detached)", run: function () { post("commitAction", { action: "checkout-detached", hash: c.hash }); } },
       { label: "Create branch here…", run: function () { post("createBranchAt", { hash: c.hash }); } },
       { label: "Create tag here…", run: function () { post("createTagAt", { hash: c.hash }); } },
@@ -246,11 +314,180 @@ function getPanelClientScript(): string {
       { label: "Reset — soft", run: function () { post("commitAction", { action: "reset-soft", hash: c.hash }); } },
       { label: "Reset — mixed", run: function () { post("commitAction", { action: "reset-mixed", hash: c.hash }); } },
       { label: "Reset — hard", danger: true, run: function () { post("commitAction", { action: "reset-hard", hash: c.hash }); } },
-      "-",
+      "-"
+    ];
+    // Compare picker entries
+    if (markedHash && markedHash !== c.hash) {
+      items.push({
+        label: UI.ctxCompareWithMarkedFiles || "Compare with marked → files",
+        run: function () {
+          compareTarget = c.hash;
+          currentHash = c.hash;
+          showCompareDetail(markedHash, c.hash);
+          post("requestCompareFiles", { a: markedHash, b: c.hash });
+        }
+      });
+      items.push({
+        label: UI.ctxCompareWithMarkedDiff || "Compare with marked → patch",
+        run: function () { post("openComparePatch", { a: markedHash, b: c.hash }); }
+      });
+    }
+    if (markedHash === c.hash) {
+      items.push({
+        label: UI.ctxUnmarkCompare || "Unmark compare base",
+        run: function () { markedHash = ""; compareTarget = ""; saveState(); applyCompareChip(); }
+      });
+    } else {
+      items.push({
+        label: UI.ctxMarkForCompare || "Mark for compare",
+        run: function () { markedHash = c.hash; saveState(); applyCompareChip(); }
+      });
+    }
+    items.push("-");
+    items.push({
+      label: UI.ctxRebaseFromHere || "Interactive rebase from here…",
+      run: function () { startRebase(c.hash); }
+    });
+    items.push("-");
+    items.push(
       { label: "Copy SHA", run: function () { post("copyText", { text: c.hash }); } },
       { label: "Copy message", run: function () { post("copyText", { text: c.subject || "" }); } },
-      { label: "Open patch view", run: function () { post("openCommitPatch", { hash: c.hash }); } },
-    ]);
+      { label: "Open patch view", run: function () { post("openCommitPatch", { hash: c.hash }); } }
+    );
+    showCtx(x, y, items);
+  }
+
+  // Rebase state: when active, replaces files panel with a todo editor.
+  var rebaseBase = "";
+  var rebaseItems = []; // [{ sha, subject, action }]
+
+  function startRebase(sha) {
+    rebaseBase = sha;
+    rebaseItems = [];
+    if (!detail) return;
+    detail.classList.remove("gv-detail--empty");
+    detail.innerHTML =
+      "<header class=\\"gv-detail-head2\\">" +
+        "<div class=\\"gv-detail-subject2\\">" + (UI.rebaseTitle || "Interactive rebase") + "</div>" +
+        "<div class=\\"gv-detail-sub\\"><code class=\\"gv-hash\\">onto " + sha.slice(0, 7) + "^</code></div>" +
+      "</header>" +
+      "<ul class=\\"gv-rebase-list\\" id=\\"rebase-list\\">" +
+        "<li class=\\"gv-detail-files-loading\\">" + (UI.loading || "Loading…") + "</li>" +
+      "</ul>" +
+      "<div class=\\"gv-rebase-actions\\">" +
+        "<button type=\\"button\\" id=\\"btn-rebase-apply\\" class=\\"gv-rebase-btn gv-rebase-btn--primary\\">" + (UI.rebaseApply || "Apply") + "</button>" +
+        "<button type=\\"button\\" id=\\"btn-rebase-cancel\\" class=\\"gv-rebase-btn\\">" + (UI.rebaseCancel || "Cancel") + "</button>" +
+        "<button type=\\"button\\" id=\\"btn-rebase-abort\\" class=\\"gv-rebase-btn gv-rebase-btn--danger\\">" + (UI.rebaseAbort || "Abort rebase") + "</button>" +
+      "</div>";
+    var btnA = document.getElementById("btn-rebase-apply");
+    var btnC = document.getElementById("btn-rebase-cancel");
+    var btnAb = document.getElementById("btn-rebase-abort");
+    if (btnA) btnA.addEventListener("click", function () {
+      vscode.postMessage({ type: "applyRebase", base: rebaseBase + "^", items: rebaseItems });
+    });
+    if (btnC) btnC.addEventListener("click", function () {
+      rebaseBase = ""; rebaseItems = [];
+      detail.classList.add("gv-detail--empty");
+      detail.innerHTML = "<p class=\\"gv-detail-hint\\">" + (UI.detailHint || "") + "</p>";
+    });
+    if (btnAb) btnAb.addEventListener("click", function () {
+      vscode.postMessage({ type: "abortRebase" });
+    });
+    vscode.postMessage({ type: "requestRebaseCommits", base: sha + "^" });
+  }
+
+  function renderRebaseList() {
+    var list = document.getElementById("rebase-list");
+    if (!list) return;
+    list.textContent = "";
+    if (!rebaseItems.length) {
+      var em = document.createElement("li");
+      em.className = "gv-detail-files-empty";
+      em.textContent = UI.rebaseEmpty || "No commits to rebase.";
+      list.appendChild(em);
+      return;
+    }
+    rebaseItems.forEach(function (it, idx) {
+      var li = document.createElement("li");
+      li.className = "gv-rebase-row gv-rebase-row--" + it.action;
+      var sel = document.createElement("select");
+      sel.className = "gv-rebase-select";
+      ["pick", "squash", "fixup", "drop"].forEach(function (a) {
+        var opt = document.createElement("option");
+        opt.value = a;
+        opt.textContent = a;
+        if (a === it.action) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.addEventListener("change", function () {
+        rebaseItems[idx].action = sel.value;
+        renderRebaseList();
+      });
+      var sh = document.createElement("code");
+      sh.className = "gv-hash";
+      sh.textContent = it.sha.slice(0, 7);
+      var sub = document.createElement("span");
+      sub.className = "gv-rebase-subject";
+      sub.textContent = it.subject;
+      sub.title = it.subject;
+      var up = document.createElement("button");
+      up.type = "button";
+      up.className = "gv-rebase-move";
+      up.textContent = "▲";
+      up.title = UI.rebaseMoveUp || "Move up";
+      up.disabled = idx === 0;
+      up.addEventListener("click", function () {
+        if (idx === 0) return;
+        var tmp = rebaseItems[idx - 1];
+        rebaseItems[idx - 1] = rebaseItems[idx];
+        rebaseItems[idx] = tmp;
+        renderRebaseList();
+      });
+      var dn = document.createElement("button");
+      dn.type = "button";
+      dn.className = "gv-rebase-move";
+      dn.textContent = "▼";
+      dn.title = UI.rebaseMoveDown || "Move down";
+      dn.disabled = idx === rebaseItems.length - 1;
+      dn.addEventListener("click", function () {
+        if (idx === rebaseItems.length - 1) return;
+        var tmp = rebaseItems[idx + 1];
+        rebaseItems[idx + 1] = rebaseItems[idx];
+        rebaseItems[idx] = tmp;
+        renderRebaseList();
+      });
+      li.appendChild(sel);
+      li.appendChild(sh);
+      li.appendChild(sub);
+      li.appendChild(up);
+      li.appendChild(dn);
+      list.appendChild(li);
+    });
+  }
+
+  function showCompareDetail(a, b) {
+    if (!detail) return;
+    detail.classList.remove("gv-detail--empty");
+    function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;"); }
+    var sa = a.slice(0, 7), sb = b.slice(0, 7);
+    detail.innerHTML =
+      "<header class=\\"gv-detail-head2\\">" +
+        "<div class=\\"gv-detail-subject2\\">" + esc(UI.comparingLabel || "Comparing") + " " + esc(sa) + " … " + esc(sb) + "</div>" +
+        "<div class=\\"gv-detail-sub\\">" +
+          "<code class=\\"gv-hash\\">" + esc(sa) + "</code>" +
+          "<span class=\\"gv-author\\">→</span>" +
+          "<code class=\\"gv-hash\\">" + esc(sb) + "</code>" +
+        "</div>" +
+      "</header>" +
+      "<div class=\\"gv-detail-files-head\\">" +
+        "<span class=\\"gv-detail-files-label\\">" + esc(UI.filesLabel || "Files") + "</span>" +
+        "<button type=\\"button\\" class=\\"gv-detail-patch-btn\\" id=\\"btn-show-compare-patch\\">" + esc(UI.openPatchShort || "Patch") + "</button>" +
+      "</div>" +
+      "<ul class=\\"gv-detail-files\\" id=\\"files-list\\">" +
+        "<li class=\\"gv-detail-files-loading\\">" + esc(UI.loading || "Loading…") + "</li>" +
+      "</ul>";
+    var p = document.getElementById("btn-show-compare-patch");
+    if (p) p.addEventListener("click", function () { post("openComparePatch", { a: a, b: b }); });
   }
 
   function ctxForLocalBranch(name, isCurrent, x, y) {
@@ -491,7 +728,39 @@ function getPanelClientScript(): string {
     if (selectedRev) msg.rev = selectedRev;
     if (pathFilter) msg.pathFilter = pathFilter;
     if (query) msg.query = query;
+    if (mergesMode && mergesMode !== "all") msg.mergesMode = mergesMode;
     vscode.postMessage(msg);
+  }
+
+  applyMergesUi();
+  applyCompareChip();
+  if (btnHideMerges) {
+    btnHideMerges.addEventListener("click", function () {
+      mergesMode = mergesMode === "hide" ? "all" : "hide";
+      applyMergesUi();
+      saveState();
+      requestGraph();
+    });
+  }
+  if (btnOnlyMerges) {
+    btnOnlyMerges.addEventListener("click", function () {
+      mergesMode = mergesMode === "only" ? "all" : "only";
+      applyMergesUi();
+      saveState();
+      requestGraph();
+    });
+  }
+  if (btnExitCompare) {
+    btnExitCompare.addEventListener("click", function () {
+      markedHash = "";
+      compareTarget = "";
+      saveState();
+      applyCompareChip();
+    });
+  }
+
+  if (btnDismissNotice) {
+    btnDismissNotice.addEventListener("click", hideRevNotice);
   }
 
   window.addEventListener("message", function (ev) {
@@ -507,6 +776,43 @@ function getPanelClientScript(): string {
     }
     if (d.type === "stashFiles") {
       if (d.ref === currentHash && renderCommitFilesRef) renderCommitFilesRef(d.files || [], "stash");
+      return;
+    }
+    if (d.type === "compareFiles") {
+      if (d.a === markedHash && d.b === compareTarget && renderCommitFilesRef) {
+        renderCommitFilesRef(d.files || [], "compare");
+      }
+      return;
+    }
+    if (d.type === "compareFilesError") {
+      var lc = document.getElementById("files-list");
+      if (lc) { lc.textContent = ""; var ec = document.createElement("li"); ec.className = "gv-detail-files-empty"; ec.textContent = d.message || "Error"; lc.appendChild(ec); }
+      return;
+    }
+    if (d.type === "rebaseCommits") {
+      rebaseItems = (d.commits || []).map(function (c) {
+        return { sha: c.sha, subject: c.subject || "", action: "pick" };
+      });
+      renderRebaseList();
+      return;
+    }
+    if (d.type === "rebaseError") {
+      var rl = document.getElementById("rebase-list");
+      if (rl) {
+        rl.textContent = "";
+        var er = document.createElement("li");
+        er.className = "gv-detail-files-empty";
+        er.textContent = d.message || "Error";
+        rl.appendChild(er);
+      }
+      return;
+    }
+    if (d.type === "rebaseDone") {
+      rebaseBase = ""; rebaseItems = [];
+      if (detail) {
+        detail.classList.add("gv-detail--empty");
+        detail.innerHTML = "<p class=\\"gv-detail-hint\\">" + (UI.detailHint || "") + "</p>";
+      }
       return;
     }
     if (d.type === "commitFilesError" || d.type === "stashFilesError") {
@@ -533,6 +839,7 @@ function getPanelClientScript(): string {
 
   function renderGraphError(code, message) {
     root.innerHTML = "";
+    hideRevNotice();
     setBranchBarVisible(false);
     if (code === "no-repo") {
       showEmptyCard(UI.emptyNoRepoTitle || "", UI.emptyNoRepoBody || "");
@@ -570,6 +877,17 @@ function getPanelClientScript(): string {
 
   function renderPayload(payload) {
     if (!payload) return;
+    // The selected rev no longer resolves; the backend fell back to the default
+    // log. Clear the stale selection so it won't be re-requested, and tell the user.
+    if (payload.revMissing) {
+      if (selectedRev === payload.revMissing) {
+        selectedRev = "";
+        saveState();
+      }
+      showRevNotice(payload.revMissing);
+    } else {
+      hideRevNotice();
+    }
     setBranchBarVisible(true);
     renderBranchTree(payload.branchTree || { current: "", locals: [], remotes: [] });
     setRepoHeader(payload.repoRoot || "", payload.branch || "", payload.viewRev || "");
@@ -653,6 +971,7 @@ function getPanelClientScript(): string {
         });
       }
       currentHash = c.hash;
+      compareTarget = "";
       // Clear stash selection if any.
       document.querySelectorAll(".gv-virtual-row--selected").forEach(function (el) {
         el.classList.remove("gv-virtual-row--selected");
@@ -709,6 +1028,15 @@ function getPanelClientScript(): string {
               hash: currentHash,
               path: f.path,
               oldPath: f.oldPath || "",
+            });
+          } else if (mode === "compare") {
+            vscode.postMessage({
+              type: "openCompareFileDiff",
+              a: markedHash,
+              b: compareTarget,
+              path: f.path,
+              oldPath: f.oldPath || "",
+              status: f.status || "M",
             });
           } else {
             vscode.postMessage({
@@ -826,6 +1154,7 @@ function getPanelClientScript(): string {
       row.style.minHeight = ROW_H + "px";
       row.style.paddingLeft = graphWidth + "px";
       if (c.hash === currentHash) row.classList.add("gv-unified-row--selected");
+      if (markedHash && c.hash === markedHash) row.classList.add("gv-unified-row--marked");
 
       var commitCell = document.createElement("div");
       commitCell.className = "gv-unified-commit";

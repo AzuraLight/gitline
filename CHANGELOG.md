@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1
+
+### Fixed
+
+- Selecting a branch/rev that no longer resolves (a deleted or renamed remote
+  branch, or a typo) no longer fails the whole graph with git's
+  "unknown revision" fatal error. The view now falls back to the default
+  history, shows a dismissible notice naming the missing ref, and clears the
+  stale selection so it isn't re-requested.
+
 ## 1.0.0
 
 First public release.

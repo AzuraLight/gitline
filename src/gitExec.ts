@@ -45,6 +45,24 @@ function splitRecord(block: string): string[] {
   return block.split("\x1e");
 }
 
+/**
+ * Returns true if `rev` resolves to a commit in this repo. Used to gracefully
+ * fall back to the default log when a selected branch/rev no longer exists
+ * (deleted/renamed remote branch, or a typo) instead of failing the whole view.
+ */
+export async function revExists(cwd: string, rev: string): Promise<boolean> {
+  try {
+    await execFileAsync("git", ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`], {
+      cwd,
+      maxBuffer: 1024 * 1024,
+      encoding: "utf8",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function getRepoRoot(cwd: string): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync("git", ["rev-parse", "--show-toplevel"], {
@@ -181,12 +199,15 @@ function parseDecorate(decorate: string): GitCommitRef[] {
   return out;
 }
 
+export type MergesMode = "all" | "hide" | "only";
+
 export async function readRecentCommits(
   cwd: string,
   limit: number,
   rev?: string,
   pathFilter?: string,
   query?: string,
+  mergesMode?: MergesMode,
 ): Promise<GitCommitRow[]> {
   const format = ["%H", "%P", "%s", "%an", "%ct", "%D"].join("%x1e") + "%x1f";
   const target = rev?.trim();
@@ -195,6 +216,11 @@ export async function readRecentCommits(
     logArgs.push(target);
   }
   logArgs.push(`--max-count=${limit}`, `--pretty=format:${format}`, "--topo-order");
+  if (mergesMode === "hide") {
+    logArgs.push("--no-merges");
+  } else if (mergesMode === "only") {
+    logArgs.push("--merges");
+  }
 
   const q = query?.trim();
   if (q && q.length > 0) {
@@ -355,6 +381,52 @@ export async function readCommitShow(repoRoot: string, sha: string): Promise<str
   return execGit(
     repoRoot,
     ["show", "--no-color", "--stat", "--patch", "--pretty=fuller", sha],
+    16 * 1024 * 1024,
+  );
+}
+
+/** Files changed between two arbitrary commits (`git diff -M a b`). */
+export async function readCompareFiles(cwd: string, a: string, b: string): Promise<GitCommitFile[]> {
+  const [nameStatus, numStat] = await Promise.all([
+    execGit(cwd, ["diff", "--no-color", "--name-status", "-M", a, b], 8 * 1024 * 1024),
+    execGit(cwd, ["diff", "--no-color", "--numstat", "-M", a, b], 8 * 1024 * 1024),
+  ]);
+  const stats = new Map<string, { ins: number; del: number }>();
+  for (const line of numStat.split(/\r?\n/)) {
+    const s = line.trim();
+    if (!s) continue;
+    const cols = s.split("\t");
+    if (cols.length < 3) continue;
+    const ins = cols[0] === "-" ? 0 : Number(cols[0]) || 0;
+    const del = cols[1] === "-" ? 0 : Number(cols[1]) || 0;
+    stats.set(cols[cols.length - 1], { ins, del });
+  }
+  const files: GitCommitFile[] = [];
+  for (const line of nameStatus.split(/\r?\n/)) {
+    const s = line.trim();
+    if (!s) continue;
+    const cols = s.split("\t");
+    const status = cols[0]?.[0] ?? "";
+    if (!status) continue;
+    if ((status === "R" || status === "C") && cols.length >= 3) {
+      const oldPath = cols[1];
+      const p = cols[2];
+      const stat = stats.get(p) ?? { ins: 0, del: 0 };
+      files.push({ status, path: p, oldPath, insertions: stat.ins, deletions: stat.del });
+    } else if (cols.length >= 2) {
+      const p = cols[1];
+      const stat = stats.get(p) ?? { ins: 0, del: 0 };
+      files.push({ status, path: p, insertions: stat.ins, deletions: stat.del });
+    }
+  }
+  return files;
+}
+
+/** Combined diff for the Compare patch tab (`git diff --stat -p a b`). */
+export async function readCompareShow(repoRoot: string, a: string, b: string): Promise<string> {
+  return execGit(
+    repoRoot,
+    ["diff", "--no-color", "--stat", "--patch", "-M", a, b],
     16 * 1024 * 1024,
   );
 }

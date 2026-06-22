@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { readBlobAt, readCommitShow } from "./gitExec";
+import { readBlobAt, readCommitShow, readCompareShow } from "./gitExec";
 
 export function commitShowUri(repoRoot: string, sha: string): vscode.Uri {
   const short = sha.slice(0, 7);
@@ -7,6 +7,16 @@ export function commitShowUri(repoRoot: string, sha: string): vscode.Uri {
     scheme: "gitline",
     path: `/${short}.patch`,
     query: new URLSearchParams({ kind: "show", root: repoRoot, sha }).toString(),
+  });
+}
+
+export function compareShowUri(repoRoot: string, a: string, b: string): vscode.Uri {
+  const sa = a.slice(0, 7);
+  const sb = b.slice(0, 7);
+  return vscode.Uri.from({
+    scheme: "gitline",
+    path: `/${sa}..${sb}.patch`,
+    query: new URLSearchParams({ kind: "compare", root: repoRoot, a, b }).toString(),
   });
 }
 
@@ -42,6 +52,19 @@ export function registerCommitShowProvider(): vscode.Disposable {
           return "";
         }
         return readBlobAt(root, sha, path);
+      }
+      if (kind === "compare") {
+        const a = q.get("a") ?? "";
+        const b = q.get("b") ?? "";
+        if (!a || !b) {
+          return vscode.l10n.t("// Gitline: invalid compare URI");
+        }
+        try {
+          return await readCompareShow(root, a, b);
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return vscode.l10n.t("// Gitline: git diff failed\n// {0}", msg);
+        }
       }
       const sha = q.get("sha");
       if (!sha) {

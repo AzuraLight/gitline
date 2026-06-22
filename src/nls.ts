@@ -30,6 +30,24 @@ export type CommitGraphWebviewUi = {
   noFiles: string;
   openPatchShort: string;
   workingChanges: string;
+  hideMergesTitle: string;
+  onlyMergesTitle: string;
+  ctxMarkForCompare: string;
+  ctxUnmarkCompare: string;
+  ctxCompareWithMarkedDiff: string;
+  ctxCompareWithMarkedFiles: string;
+  comparingLabel: string;
+  exitCompareTitle: string;
+  ctxRebaseFromHere: string;
+  rebaseTitle: string;
+  rebaseApply: string;
+  rebaseCancel: string;
+  rebaseAbort: string;
+  rebaseEmpty: string;
+  rebaseMoveUp: string;
+  rebaseMoveDown: string;
+  revMissingNotice: string;
+  dismissNoticeTitle: string;
 };
 
 /** Localized strings for the commit graph webview. */
@@ -65,6 +83,24 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     noFiles: vscode.l10n.t("No files changed."),
     openPatchShort: vscode.l10n.t("Patch"),
     workingChanges: vscode.l10n.t("Working changes"),
+    hideMergesTitle: vscode.l10n.t("Hide merge commits"),
+    onlyMergesTitle: vscode.l10n.t("Only merge commits"),
+    ctxMarkForCompare: vscode.l10n.t("Mark for compare"),
+    ctxUnmarkCompare: vscode.l10n.t("Unmark compare base"),
+    ctxCompareWithMarkedDiff: vscode.l10n.t("Compare with marked → patch"),
+    ctxCompareWithMarkedFiles: vscode.l10n.t("Compare with marked → files"),
+    comparingLabel: vscode.l10n.t("Comparing"),
+    exitCompareTitle: vscode.l10n.t("Exit compare view"),
+    ctxRebaseFromHere: vscode.l10n.t("Interactive rebase from here…"),
+    rebaseTitle: vscode.l10n.t("Interactive rebase"),
+    rebaseApply: vscode.l10n.t("Apply"),
+    rebaseCancel: vscode.l10n.t("Cancel"),
+    rebaseAbort: vscode.l10n.t("Abort rebase"),
+    rebaseEmpty: vscode.l10n.t("No commits to rebase."),
+    rebaseMoveUp: vscode.l10n.t("Move up"),
+    rebaseMoveDown: vscode.l10n.t("Move down"),
+    revMissingNotice: vscode.l10n.t("“{0}” no longer exists — showing the default history instead."),
+    dismissNoticeTitle: vscode.l10n.t("Dismiss"),
   };
 }
 
