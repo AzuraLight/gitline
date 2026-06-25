@@ -31,9 +31,11 @@ import {
 import { getCommitGraphWebviewUi, getWebviewHtmlLang } from "./nls";
 import {
   abortRebase,
+  continueRebase,
   isRebaseInProgress,
   readRebaseCommits,
   runInteractiveRebase,
+  skipRebase,
   type RebaseAction,
   type RebaseTodoItem,
 } from "./rebaseRun";
@@ -227,11 +229,12 @@ async function sendGraphPayload(
     const pf = typeof pathFilter === "string" && pathFilter.trim().length > 0 ? pathFilter.trim() : undefined;
     const q = typeof query === "string" && query.trim().length > 0 ? query.trim() : undefined;
     const branch = await readCurrentBranchName(root);
-    const [commits, branchTree, working, stashes] = await Promise.all([
+    const [commits, branchTree, working, stashes, rebaseInProgress] = await Promise.all([
       readRecentCommits(root, capped, logRev, pf, q, mergesMode),
       readBranchTreePayload(root),
       readWorkingState(root).catch(() => ({ staged: 0, modified: 0, untracked: 0, conflicted: 0 })),
       readStashes(root).catch(() => []),
+      isRebaseInProgress(root).catch(() => false),
     ]);
     webview.postMessage({
       type: "graphPayload",
@@ -240,6 +243,7 @@ async function sendGraphPayload(
         branch,
         viewRev: logRev ?? "",
         revMissing: revMissing ?? "",
+        rebaseInProgress,
         pathFilter: pf ?? "",
         query: q ?? "",
         branchTree,
@@ -325,7 +329,7 @@ async function sendRebaseCommits(webview: vscode.Webview, base: string): Promise
   const root = await pickCommitGraphRepoRoot();
   if (!root) return;
   try {
-    if (isRebaseInProgress(root)) {
+    if (await isRebaseInProgress(root)) {
       webview.postMessage({
         type: "rebaseError",
         message: vscode.l10n.t("A rebase is already in progress. Resolve or abort it first."),
@@ -370,7 +374,7 @@ async function applyRebase(
     webview.postMessage({ type: "reloadNow" });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    if (isRebaseInProgress(root)) {
+    if (await isRebaseInProgress(root)) {
       webview.postMessage({
         type: "rebaseError",
         message: vscode.l10n.t("Rebase paused (likely a conflict). Resolve in the SCM view, then continue or abort.\n{0}", msg),
@@ -381,10 +385,59 @@ async function applyRebase(
   }
 }
 
+async function continueRebaseAndReload(webview: vscode.Webview): Promise<void> {
+  const root = await pickCommitGraphRepoRoot();
+  if (!root) return;
+  if (!(await isRebaseInProgress(root))) {
+    webview.postMessage({ type: "rebaseDone" });
+    webview.postMessage({ type: "reloadNow" });
+    return;
+  }
+  try {
+    await continueRebase(root);
+    if (await isRebaseInProgress(root)) {
+      webview.postMessage({
+        type: "rebaseError",
+        message: vscode.l10n.t("Still paused — there are unresolved conflicts. Resolve them in the SCM view, then continue again."),
+      });
+    } else {
+      webview.postMessage({ type: "rebaseDone" });
+    }
+    webview.postMessage({ type: "reloadNow" });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    webview.postMessage({ type: "rebaseError", message: msg });
+    webview.postMessage({ type: "reloadNow" });
+  }
+}
+
+async function skipRebaseAndReload(webview: vscode.Webview): Promise<void> {
+  const root = await pickCommitGraphRepoRoot();
+  if (!root) return;
+  if (!(await isRebaseInProgress(root))) {
+    webview.postMessage({ type: "rebaseDone" });
+    webview.postMessage({ type: "reloadNow" });
+    return;
+  }
+  const yes = await confirm(vscode.l10n.t("Skip the current commit and continue the rebase?"), true);
+  if (!yes) return;
+  try {
+    await skipRebase(root);
+    if (!(await isRebaseInProgress(root))) {
+      webview.postMessage({ type: "rebaseDone" });
+    }
+    webview.postMessage({ type: "reloadNow" });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    webview.postMessage({ type: "rebaseError", message: msg });
+    webview.postMessage({ type: "reloadNow" });
+  }
+}
+
 async function abortRebaseAndReload(webview: vscode.Webview): Promise<void> {
   const root = await pickCommitGraphRepoRoot();
   if (!root) return;
-  if (!isRebaseInProgress(root)) {
+  if (!(await isRebaseInProgress(root))) {
     webview.postMessage({ type: "rebaseDone" });
     return;
   }
@@ -708,6 +761,14 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
           }
           if (msg?.type === "abortRebase") {
             void abortRebaseAndReload(webview);
+            return;
+          }
+          if (msg?.type === "continueRebase") {
+            void continueRebaseAndReload(webview);
+            return;
+          }
+          if (msg?.type === "skipRebase") {
+            void skipRebaseAndReload(webview);
             return;
           }
         },

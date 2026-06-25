@@ -66,5 +66,8 @@
   "{0} ({1})": "{0} ({1})",
   "{0} → {1} ({2})": "{0} → {1} ({2})",
   "“{0}” no longer exists — showing the default history instead.": "“{0}” 항목이 더 이상 존재하지 않아 기본 히스토리를 표시합니다.",
-  "Dismiss": "닫기"
+  "Dismiss": "닫기",
+  "A rebase is paused. Resolve conflicts in the SCM view, then continue.": "리베이스가 일시 중지됨. SCM 뷰에서 충돌을 해결한 뒤 계속하세요.",
+  "Continue": "계속",
+  "Skip": "건너뛰기"
 }

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.1.0
+
+### Added
+
+- **Interactive rebase — conflict recovery.** When a rebase pauses (typically a
+  conflict), the panel now shows a banner with **Continue / Skip / Abort** so you
+  can finish the rebase after resolving in the SCM view, instead of only being
+  able to abort.
+
+### Fixed
+
+- Interactive rebase no longer hangs on `squash` / `fixup` / `reword` steps: the
+  combined commit message is accepted automatically rather than waiting on a
+  commit-message editor that has no terminal.
+- In-progress-rebase detection now resolves the rebase state directory via
+  `git rev-parse --git-path`, so it is correct in worktrees and submodules
+  (where `.git` is a file, not a directory).
+
+### Docs
+
+- README now documents the **interactive rebase** and **compare two commits**
+  features (shipped earlier but undocumented), and the Limitations section
+  reflects the real gaps (single-repo, `origin`-only push, no top-level pull).
+
 ## 1.0.1
 
 ### Fixed

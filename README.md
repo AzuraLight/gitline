@@ -35,11 +35,16 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 - Click a file → native VS Code diff editor, with rename-aware before/after paths.
 - "Patch" button opens the full `git show` as a tab.
 
+### Compare and rewrite
+
+- **Compare two commits** — mark a commit, then "Compare with marked" on another to see the changed files or full patch between them.
+- **Interactive rebase** — right-click a commit → *Interactive rebase from here…* opens an in-panel todo editor (reorder, `pick` / `squash` / `fixup` / `drop`). When a rebase pauses on a conflict, a banner offers **Continue / Skip / Abort** after you resolve in the SCM view.
+
 ### Right-click context menus
 
 | Target | Actions |
 |---|---|
-| **Commit** | Checkout (detached) · Create branch / tag here · Cherry-pick · Revert · Merge / Rebase · Reset (soft / mixed / hard) · Copy SHA / message · Open patch |
+| **Commit** | Checkout (detached) · Create branch / tag here · Cherry-pick · Revert · Merge / Rebase · Interactive rebase from here · Reset (soft / mixed / hard) · Mark / compare with marked · Copy SHA / message · Open patch |
 | **Local branch** | Checkout · Merge / Rebase · Push · Rename · Delete / Force delete · Copy name |
 | **Remote branch** | Create tracking branch · Fetch · Merge · Delete on remote · Copy name |
 | **Stash** | Apply · Pop · Drop · Copy ref |
@@ -70,6 +75,8 @@ For per-file history: right-click any file → **Gitline: File History**, or use
 | Right-click branch/commit actions | ✅ | partial | ✅ | ✅ |
 | Working changes + stashes in graph | ✅ | — | partial | — |
 | Search by author / message / SHA | ✅ | partial | ✅ | partial |
+| Interactive rebase (in-panel) | ✅ | — | — | ✅ |
+| Compare two commits | ✅ | partial | ✅ | ✅ |
 | File history view | ✅ | ✅ | ✅ (visual) | ✅ |
 | No account / no sign-in | ✅ | — (account prompts) | — | ✅ |
 | Telemetry-free | ✅ | — | — | ✅ |
@@ -81,13 +88,14 @@ For per-file history: right-click any file → **Gitline: File History**, or use
 - Git on `PATH`
 - The built-in `vscode.git` extension (bundled)
 
-## Limitations (v1.0)
+## Limitations
 
 - Single-repo workspaces. Multi-root with multiple repos picks the first.
-- No interactive rebase editor yet.
-- No two-commit compare picker yet.
+- Push targets `origin` and there is no `--force-with-lease`, so a branch
+  rewritten by rebase can't be pushed from the panel yet.
+- No top-level pull / fetch-all command (per-branch fetch only).
 
-Both are on the v1.1 roadmap.
+These are on the roadmap.
 
 ## Contributing
 

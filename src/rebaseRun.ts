@@ -28,13 +28,23 @@ export async function readRebaseCommits(cwd: string, base: string): Promise<Reba
   return rows;
 }
 
-/** True when a rebase is already in progress for this repo. */
-export function isRebaseInProgress(cwd: string): boolean {
-  const gitDir = path.join(cwd, ".git");
-  return (
-    fs.existsSync(path.join(gitDir, "rebase-merge")) ||
-    fs.existsSync(path.join(gitDir, "rebase-apply"))
-  );
+/**
+ * True when a rebase is already in progress for this repo. Resolves the rebase
+ * state directories via `git rev-parse --git-path` so it stays correct for
+ * worktrees and submodules, where `.git` is a file rather than a directory.
+ */
+export async function isRebaseInProgress(cwd: string): Promise<boolean> {
+  for (const name of ["rebase-merge", "rebase-apply"]) {
+    try {
+      const rel = (await runGitCommand(cwd, ["rev-parse", "--git-path", name])).trim();
+      if (rel && fs.existsSync(path.resolve(cwd, rel))) {
+        return true;
+      }
+    } catch {
+      /* ignore — fall through to next marker */
+    }
+  }
+  return false;
 }
 
 function quoteForSequenceEditor(p: string): string {
@@ -77,15 +87,20 @@ export async function runInteractiveRebase(
   );
 
   const editorCmd = `${quoteForSequenceEditor(process.execPath)} ${quoteForSequenceEditor(scriptPath)}`;
+  const cleanup = withNoopCommitEditor();
 
   try {
     await execFileAsync("git", ["rebase", "-i", base], {
       cwd,
       maxBuffer: 16 * 1024 * 1024,
       encoding: "utf8",
-      env: { ...process.env, GIT_SEQUENCE_EDITOR: editorCmd },
+      // GIT_SEQUENCE_EDITOR rewrites the todo; GIT_EDITOR accepts the default
+      // (combined) commit message for any squash/fixup/reword step instead of
+      // blocking on a real editor that has no TTY here.
+      env: { ...process.env, GIT_SEQUENCE_EDITOR: editorCmd, GIT_EDITOR: cleanup.editorCmd },
     });
   } finally {
+    cleanup.dispose();
     try {
       fs.unlinkSync(scriptPath);
     } catch {
@@ -97,6 +112,47 @@ export async function runInteractiveRebase(
       /* ignore */
     }
   }
+}
+
+/**
+ * A GIT_EDITOR that exits 0 without touching the file git hands it, so git uses
+ * whatever default content it prepared (e.g. the combined squash message). The
+ * caller must `dispose()` to remove the temp script.
+ */
+function withNoopCommitEditor(): { editorCmd: string; dispose: () => void } {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const scriptPath = path.join(os.tmpdir(), `gitline-noop-editor-${id}.js`);
+  fs.writeFileSync(scriptPath, "process.exit(0);\n", "utf8");
+  return {
+    editorCmd: `${quoteForSequenceEditor(process.execPath)} ${quoteForSequenceEditor(scriptPath)}`,
+    dispose: () => {
+      try {
+        fs.unlinkSync(scriptPath);
+      } catch {
+        /* ignore */
+      }
+    },
+  };
+}
+
+/** Continues a paused rebase after the user resolved conflicts in the SCM view. */
+export async function continueRebase(cwd: string): Promise<void> {
+  const cleanup = withNoopCommitEditor();
+  try {
+    await execFileAsync("git", ["rebase", "--continue"], {
+      cwd,
+      maxBuffer: 16 * 1024 * 1024,
+      encoding: "utf8",
+      env: { ...process.env, GIT_EDITOR: cleanup.editorCmd },
+    });
+  } finally {
+    cleanup.dispose();
+  }
+}
+
+/** Skips the current commit of a paused rebase. */
+export async function skipRebase(cwd: string): Promise<void> {
+  await runGitCommand(cwd, ["rebase", "--skip"]);
 }
 
 export async function abortRebase(cwd: string): Promise<void> {

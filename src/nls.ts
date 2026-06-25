@@ -48,6 +48,9 @@ export type CommitGraphWebviewUi = {
   rebaseMoveDown: string;
   revMissingNotice: string;
   dismissNoticeTitle: string;
+  rebaseInProgressNotice: string;
+  rebaseContinue: string;
+  rebaseSkip: string;
 };
 
 /** Localized strings for the commit graph webview. */
@@ -101,6 +104,9 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     rebaseMoveDown: vscode.l10n.t("Move down"),
     revMissingNotice: vscode.l10n.t("“{0}” no longer exists — showing the default history instead."),
     dismissNoticeTitle: vscode.l10n.t("Dismiss"),
+    rebaseInProgressNotice: vscode.l10n.t("A rebase is paused. Resolve conflicts in the SCM view, then continue."),
+    rebaseContinue: vscode.l10n.t("Continue"),
+    rebaseSkip: vscode.l10n.t("Skip"),
   };
 }
 

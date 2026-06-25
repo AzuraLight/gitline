@@ -77,6 +77,15 @@ export function buildCommitGraphShellHtml(
       <span id="rev-notice-text" class="gv-rev-notice__text"></span>
       <button type="button" id="btn-dismiss-notice" class="gv-rev-notice__close" title="${escapeHtml(ui.dismissNoticeTitle)}" aria-label="${escapeHtml(ui.dismissNoticeTitle)}">✕</button>
     </div>
+    <div id="rebase-banner" class="gv-rebase-banner" hidden role="status" aria-live="polite">
+      <span class="gv-rebase-banner__icon" aria-hidden="true">⎇</span>
+      <span class="gv-rebase-banner__text">${escapeHtml(ui.rebaseInProgressNotice)}</span>
+      <span class="gv-rebase-banner__actions">
+        <button type="button" id="btn-rebase-continue" class="gv-rebase-banner__btn gv-rebase-banner__btn--primary">${escapeHtml(ui.rebaseContinue)}</button>
+        <button type="button" id="btn-rebase-skip" class="gv-rebase-banner__btn">${escapeHtml(ui.rebaseSkip)}</button>
+        <button type="button" id="btn-rebase-abort2" class="gv-rebase-banner__btn gv-rebase-banner__btn--danger">${escapeHtml(ui.rebaseAbort)}</button>
+      </span>
+    </div>
   </header>
   <main class="gv-panel-main gv-workspace-root">
     <aside id="branch-bar" class="gv-ref-sidebar" hidden aria-label="${escapeHtml(ui.branchBarAria)}">
@@ -158,6 +167,10 @@ function getPanelClientScript(): string {
   var revNotice = document.getElementById("rev-notice");
   var revNoticeText = document.getElementById("rev-notice-text");
   var btnDismissNotice = document.getElementById("btn-dismiss-notice");
+  var rebaseBanner = document.getElementById("rebase-banner");
+  var btnRebaseContinue = document.getElementById("btn-rebase-continue");
+  var btnRebaseSkip = document.getElementById("btn-rebase-skip");
+  var btnRebaseAbort2 = document.getElementById("btn-rebase-abort2");
   if (!root || !detail || !graphWorkspace || !emptyState) return;
 
   var state = vscode.getState() || {};
@@ -198,6 +211,12 @@ function getPanelClientScript(): string {
 
   function hideRevNotice() {
     if (revNotice) revNotice.setAttribute("hidden", "");
+  }
+
+  function setRebaseBanner(active) {
+    if (!rebaseBanner) return;
+    if (active) rebaseBanner.removeAttribute("hidden");
+    else rebaseBanner.setAttribute("hidden", "");
   }
 
   function applyCompareChip() {
@@ -763,6 +782,22 @@ function getPanelClientScript(): string {
     btnDismissNotice.addEventListener("click", hideRevNotice);
   }
 
+  if (btnRebaseContinue) {
+    btnRebaseContinue.addEventListener("click", function () {
+      vscode.postMessage({ type: "continueRebase" });
+    });
+  }
+  if (btnRebaseSkip) {
+    btnRebaseSkip.addEventListener("click", function () {
+      vscode.postMessage({ type: "skipRebase" });
+    });
+  }
+  if (btnRebaseAbort2) {
+    btnRebaseAbort2.addEventListener("click", function () {
+      vscode.postMessage({ type: "abortRebase" });
+    });
+  }
+
   window.addEventListener("message", function (ev) {
     var d = ev.data;
     if (!d || typeof d !== "object") return;
@@ -840,6 +875,7 @@ function getPanelClientScript(): string {
   function renderGraphError(code, message) {
     root.innerHTML = "";
     hideRevNotice();
+    setRebaseBanner(false);
     setBranchBarVisible(false);
     if (code === "no-repo") {
       showEmptyCard(UI.emptyNoRepoTitle || "", UI.emptyNoRepoBody || "");
@@ -888,6 +924,7 @@ function getPanelClientScript(): string {
     } else {
       hideRevNotice();
     }
+    setRebaseBanner(!!payload.rebaseInProgress);
     setBranchBarVisible(true);
     renderBranchTree(payload.branchTree || { current: "", locals: [], remotes: [] });
     setRepoHeader(payload.repoRoot || "", payload.branch || "", payload.viewRev || "");
