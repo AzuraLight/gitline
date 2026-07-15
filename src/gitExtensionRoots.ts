@@ -39,3 +39,24 @@ export async function tryRootFromBuiltInGit(): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * All repo roots the built-in Git extension currently knows about (normalized).
+ * Used to build the multi-repo picker so gitline lists the same repos as SCM.
+ */
+export async function listRootsFromBuiltInGit(): Promise<string[]> {
+  const ext = vscode.extensions.getExtension<GitExtensionExports>("vscode.git");
+  if (!ext) {
+    return [];
+  }
+  try {
+    if (!ext.isActive) {
+      await ext.activate();
+    }
+    const api = ext.exports?.getAPI?.(1);
+    const repos = api?.repositories ?? [];
+    return repos.map((r) => path.normalize(r.rootUri.fsPath));
+  } catch {
+    return [];
+  }
+}

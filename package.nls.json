@@ -3,6 +3,9 @@
   "extension.description": "Git visualization: commit graph in the panel.",
   "command.openCommitGraph.title": "Gitline: Open Commit Panel",
   "command.openFileHistory.title": "Gitline: File History",
+  "command.pull.title": "Gitline: Pull",
+  "command.push.title": "Gitline: Push",
+  "command.fetchAll.title": "Gitline: Fetch All",
   "viewContainer.panel.title": "Gitline",
   "view.panel.name": "Gitline",
   "view.panel.contextualTitle": "Gitline"

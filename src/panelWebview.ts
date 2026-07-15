@@ -9,6 +9,7 @@ import {
   readFirstParent,
   readRecentCommits,
   readStashes,
+  readSyncState,
   readWorkingState,
   revExists,
   runGitCommand,
@@ -17,9 +18,12 @@ import {
 import {
   createBranchFrom,
   createTagAt,
+  fetchAll,
   isBranchActionId,
   isCommitActionId,
   isStashActionId,
+  pullCurrent,
+  pushCurrent,
   renameBranch,
   runBranchAction,
   runCommitAction,
@@ -39,12 +43,39 @@ import {
   type RebaseAction,
   type RebaseTodoItem,
 } from "./rebaseRun";
-import { pickCommitGraphRepoRoot } from "./repoPick";
+import { listRepoRoots, pickCommitGraphRepoRoot } from "./repoPick";
 
 let panelViewRef: vscode.WebviewView | undefined;
+let extContext: vscode.ExtensionContext | undefined;
+
+const SELECTED_REPO_KEY = "gitline.selectedRepo";
+
+/**
+ * The repo the panel should act on: the user's picked repo when it is still
+ * present in the current window, otherwise the auto-detected default. All
+ * backend handlers resolve through here so the multi-repo picker is honored.
+ */
+export async function getActiveRepoRoot(): Promise<string | null> {
+  const stored = extContext?.workspaceState.get<string>(SELECTED_REPO_KEY);
+  if (stored) {
+    const repos = await listRepoRoots();
+    if (repos.includes(stored)) {
+      return stored;
+    }
+  }
+  return pickCommitGraphRepoRoot();
+}
+
+async function setSelectedRepo(root: string): Promise<void> {
+  const repos = await listRepoRoots();
+  if (!repos.includes(root)) {
+    return;
+  }
+  await extContext?.workspaceState.update(SELECTED_REPO_KEY, root);
+}
 
 async function openCommitPreview(sha: string): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) {
     return;
   }
@@ -78,7 +109,7 @@ async function dispatchCommitAction(
   action: CommitActionId,
   hash: string,
 ): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   const short = hash.slice(0, 7);
   const prompts: Record<CommitActionId, { msg: string; destructive: boolean }> = {
@@ -104,7 +135,7 @@ async function dispatchBranchAction(
   action: BranchActionId,
   branch: string,
 ): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   const prompts: Record<BranchActionId, { msg: string; destructive: boolean }> = {
     "branch-checkout": { msg: vscode.l10n.t("Checkout {0}?", branch), destructive: false },
@@ -122,7 +153,11 @@ async function dispatchBranchAction(
       destructive: true,
     },
     "branch-fetch": { msg: vscode.l10n.t("Fetch {0}?", branch), destructive: false },
-    "branch-push": { msg: vscode.l10n.t("Push {0} to origin?", branch), destructive: false },
+    "branch-push": { msg: vscode.l10n.t("Push {0} to its remote?", branch), destructive: false },
+    "branch-push-force": {
+      msg: vscode.l10n.t("Force-push {0} (with lease)? Overwrites the remote branch.", branch),
+      destructive: true,
+    },
     "branch-merge-into-current": {
       msg: vscode.l10n.t("Merge {0} into the current branch?", branch),
       destructive: false,
@@ -142,7 +177,7 @@ async function dispatchStashAction(
   action: StashActionId,
   ref: string,
 ): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   const prompts: Record<StashActionId, { msg: string; destructive: boolean }> = {
     "stash-apply": { msg: vscode.l10n.t("Apply {0} to the working tree?", ref), destructive: false },
@@ -157,8 +192,23 @@ async function dispatchStashAction(
   await reportAndReload(webview, () => runStashAction(root, action, ref));
 }
 
+type SyncOp = "pull" | "push" | "fetch";
+
+async function dispatchSyncOp(webview: vscode.Webview, op: SyncOp): Promise<void> {
+  const root = await getActiveRepoRoot();
+  if (!root) return;
+  const run =
+    op === "pull" ? () => pullCurrent(root) : op === "push" ? () => pushCurrent(root) : () => fetchAll(root);
+  await reportAndReload(webview, run);
+}
+
+async function selectRepoAndReload(webview: vscode.Webview, root: string): Promise<void> {
+  await setSelectedRepo(root);
+  webview.postMessage({ type: "reloadNow" });
+}
+
 async function promptCreateBranch(webview: vscode.Webview, refspec: string): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   const name = await vscode.window.showInputBox({
     prompt: vscode.l10n.t("New branch name (at {0})", refspec.slice(0, 7)),
@@ -169,7 +219,7 @@ async function promptCreateBranch(webview: vscode.Webview, refspec: string): Pro
 }
 
 async function promptCreateTag(webview: vscode.Webview, refspec: string): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   const name = await vscode.window.showInputBox({
     prompt: vscode.l10n.t("Tag name (at {0})", refspec.slice(0, 7)),
@@ -180,7 +230,7 @@ async function promptCreateTag(webview: vscode.Webview, refspec: string): Promis
 }
 
 async function promptRenameBranch(webview: vscode.Webview, branch: string): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   const next = await vscode.window.showInputBox({
     prompt: vscode.l10n.t("Rename {0} to…", branch),
@@ -204,7 +254,7 @@ async function sendGraphPayload(
   query?: string,
   mergesMode?: MergesMode,
 ): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) {
     webview.postMessage({
       type: "graphError",
@@ -229,21 +279,26 @@ async function sendGraphPayload(
     const pf = typeof pathFilter === "string" && pathFilter.trim().length > 0 ? pathFilter.trim() : undefined;
     const q = typeof query === "string" && query.trim().length > 0 ? query.trim() : undefined;
     const branch = await readCurrentBranchName(root);
-    const [commits, branchTree, working, stashes, rebaseInProgress] = await Promise.all([
+    const [commits, branchTree, working, stashes, rebaseInProgress, sync, repos] = await Promise.all([
       readRecentCommits(root, capped, logRev, pf, q, mergesMode),
       readBranchTreePayload(root),
       readWorkingState(root).catch(() => ({ staged: 0, modified: 0, untracked: 0, conflicted: 0 })),
       readStashes(root).catch(() => []),
       isRebaseInProgress(root).catch(() => false),
+      readSyncState(root).catch(() => ({ upstream: null, ahead: 0, behind: 0 })),
+      listRepoRoots().catch(() => [root]),
     ]);
     webview.postMessage({
       type: "graphPayload",
       payload: {
         repoRoot: root,
+        repos,
+        selectedRepo: root,
         branch,
         viewRev: logRev ?? "",
         revMissing: revMissing ?? "",
         rebaseInProgress,
+        sync,
         pathFilter: pf ?? "",
         query: q ?? "",
         branchTree,
@@ -259,7 +314,7 @@ async function sendGraphPayload(
 }
 
 async function sendStashFiles(webview: vscode.Webview, ref: string): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   try {
     // git stash show works like git show for the named stash.
@@ -309,7 +364,7 @@ async function sendStashFiles(webview: vscode.Webview, ref: string): Promise<voi
 }
 
 async function openStashFileDiff(ref: string, filePath: string, oldPath: string | undefined): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   const before = oldPath || filePath;
   const leftUri = commitFileUri(root, `${ref}^1`, before);
@@ -326,7 +381,7 @@ function isRebaseAction(s: unknown): s is RebaseAction {
 }
 
 async function sendRebaseCommits(webview: vscode.Webview, base: string): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   try {
     if (await isRebaseInProgress(root)) {
@@ -349,7 +404,7 @@ async function applyRebase(
   base: string,
   items: RebaseTodoItem[],
 ): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   if (items.length === 0) {
     webview.postMessage({ type: "rebaseError", message: vscode.l10n.t("Nothing to rebase.") });
@@ -386,7 +441,7 @@ async function applyRebase(
 }
 
 async function continueRebaseAndReload(webview: vscode.Webview): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   if (!(await isRebaseInProgress(root))) {
     webview.postMessage({ type: "rebaseDone" });
@@ -412,7 +467,7 @@ async function continueRebaseAndReload(webview: vscode.Webview): Promise<void> {
 }
 
 async function skipRebaseAndReload(webview: vscode.Webview): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   if (!(await isRebaseInProgress(root))) {
     webview.postMessage({ type: "rebaseDone" });
@@ -435,7 +490,7 @@ async function skipRebaseAndReload(webview: vscode.Webview): Promise<void> {
 }
 
 async function abortRebaseAndReload(webview: vscode.Webview): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   if (!(await isRebaseInProgress(root))) {
     webview.postMessage({ type: "rebaseDone" });
@@ -454,7 +509,7 @@ async function abortRebaseAndReload(webview: vscode.Webview): Promise<void> {
 }
 
 async function sendCompareFiles(webview: vscode.Webview, a: string, b: string): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   try {
     const files = await readCompareFiles(root, a, b);
@@ -466,7 +521,7 @@ async function sendCompareFiles(webview: vscode.Webview, a: string, b: string): 
 }
 
 async function openComparePatch(a: string, b: string): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   const doc = await vscode.workspace.openTextDocument(compareShowUri(root, a, b));
   await vscode.window.showTextDocument(doc, { preview: true, preserveFocus: true });
@@ -479,7 +534,7 @@ async function openCompareFileDiff(
   status: string,
   oldPath: string | undefined,
 ): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) return;
   const sa = a.slice(0, 7);
   const sb = b.slice(0, 7);
@@ -509,7 +564,7 @@ async function openCompareFileDiff(
 }
 
 async function sendCommitFiles(webview: vscode.Webview, hash: string): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) {
     return;
   }
@@ -528,7 +583,7 @@ async function openCommitFileDiff(
   status: string,
   oldPath: string | undefined,
 ): Promise<void> {
-  const root = await pickCommitGraphRepoRoot();
+  const root = await getActiveRepoRoot();
   if (!root) {
     return;
   }
@@ -594,6 +649,7 @@ export async function revealCommitPanelAndReload(): Promise<void> {
 }
 
 export function registerGitlinePanelWebview(context: vscode.ExtensionContext): vscode.Disposable {
+  extContext = context;
   const provider: vscode.WebviewViewProvider = {
     resolveWebviewView(webviewView: vscode.WebviewView): void | Thenable<void> {
       panelViewRef = webviewView;
@@ -624,8 +680,21 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
           a?: string;
           b?: string;
           base?: string;
+          op?: string;
+          root?: string;
           items?: Array<{ sha?: string; subject?: string; action?: string }>;
         }) => {
+          if (msg?.type === "selectRepo" && typeof msg.root === "string") {
+            void selectRepoAndReload(webview, msg.root);
+            return;
+          }
+          if (
+            msg?.type === "runSync" &&
+            (msg.op === "pull" || msg.op === "push" || msg.op === "fetch")
+          ) {
+            void dispatchSyncOp(webview, msg.op);
+            return;
+          }
           if (msg?.type === "requestGraph") {
             const lim = typeof msg.limit === "number" ? msg.limit : 200;
             const r = typeof msg.rev === "string" ? msg.rev : undefined;

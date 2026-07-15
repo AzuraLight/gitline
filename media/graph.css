@@ -511,6 +511,109 @@ body.gv-commit-body.gv-in-panel {
   color: var(--vscode-foreground);
 }
 
+.gv-shell .gv-repo-picker {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.gv-shell .gv-repo-badge {
+  text-align: left;
+  cursor: default;
+}
+
+.gv-shell .gv-repo-badge--picker {
+  cursor: pointer;
+}
+
+.gv-shell .gv-repo-badge--picker:hover {
+  border-color: color-mix(in srgb, var(--gv-accent) 45%, var(--gv-line));
+}
+
+.gv-shell .gv-repo-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  min-width: 180px;
+  max-width: 340px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  border: 1px solid var(--gv-line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.gv-shell .gv-repo-menu[hidden] {
+  display: none;
+}
+
+.gv-shell .gv-repo-menu__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font-size: 0.84em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.gv-shell .gv-repo-menu__item:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.gv-shell .gv-repo-menu__item--active {
+  font-weight: 600;
+}
+
+.gv-shell .gv-sync {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 6px;
+}
+
+.gv-shell .gv-sync__btn {
+  font-family: var(--gv-font-mono);
+  font-size: 0.82em;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--gv-line);
+  color: var(--gv-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.gv-shell .gv-sync__btn:hover:not(:disabled) {
+  color: var(--vscode-foreground);
+  border-color: color-mix(in srgb, var(--gv-accent) 40%, var(--gv-line));
+}
+
+.gv-shell .gv-sync__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.gv-shell .gv-sync__counts {
+  margin-left: 3px;
+  font-size: 0.92em;
+  color: var(--gv-accent);
+}
+
+.gv-shell .gv-sync__counts[hidden] {
+  display: none;
+}
+
 .gv-shell .gv-rev-notice {
   display: flex;
   align-items: center;

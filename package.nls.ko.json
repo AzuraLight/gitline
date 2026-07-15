@@ -3,6 +3,9 @@
   "extension.description": "Git 시각화: 하단 패널의 커밋 그래프.",
   "command.openCommitGraph.title": "Gitline: 커밋 패널 열기",
   "command.openFileHistory.title": "Gitline: 파일 히스토리",
+  "command.pull.title": "Gitline: 풀 (Pull)",
+  "command.push.title": "Gitline: 푸시 (Push)",
+  "command.fetchAll.title": "Gitline: 전체 페치 (Fetch All)",
   "viewContainer.panel.title": "Gitline",
   "view.panel.name": "Gitline",
   "view.panel.contextualTitle": "Gitline"

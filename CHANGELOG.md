@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.0
+
+### Added
+
+- **Multi-repo support.** When the window contains more than one Git repository
+  (a multi-root workspace or a monorepo with several checkouts), the repo name in
+  the panel header becomes a picker (▾). Choose any repo to switch the whole view
+  — graph, branches, stashes, and actions all follow the selection, which is
+  remembered per workspace.
+- **Remote sync toolbar.** The header gains **Pull / Push / Fetch** buttons.
+  Push targets the current branch's configured upstream (publishing to `origin`
+  with `-u` when it has none); Pull is fast-forward-only; Fetch runs
+  `fetch --all --prune`. An `↑ahead ↓behind` badge shows how the current branch
+  compares to its upstream.
+- **Force push (with lease).** Local branches gain a **Force push (with lease)**
+  context-menu action so a rebased/amended branch can be pushed safely — it
+  refuses if the remote moved unexpectedly.
+- New commands: **Gitline: Pull**, **Gitline: Push**, **Gitline: Fetch All**.
+
 ## 1.1.0
 
 ### Added

@@ -49,7 +49,10 @@ export function buildCommitGraphShellHtml(
         <span class="gv-topbar__mark" aria-hidden="true"></span>
         <span class="gv-title">${escapeHtml(ui.heading)}</span>
       </div>
-      <span class="gv-repo-badge" id="repo-path"></span>
+      <div class="gv-repo-picker" id="repo-picker">
+        <button type="button" class="gv-repo-badge" id="repo-path" aria-haspopup="true" aria-expanded="false" title="${escapeHtml(ui.repoPickerTitle)}"></button>
+        <div class="gv-repo-menu" id="repo-menu" role="menu" hidden></div>
+      </div>
     </div>
     <div class="gv-repo-fullpath gv-topbar__path" id="repo-full" hidden></div>
     <div class="gv-toolbar gv-topbar__tools" role="toolbar" aria-label="${escapeHtml(ui.toolbarAria)}">
@@ -61,6 +64,11 @@ export function buildCommitGraphShellHtml(
       <div class="gv-merge-toggle" role="group" aria-label="merges">
         <button type="button" id="btn-hide-merges" class="gv-merge-toggle__btn" title="${escapeHtml(ui.hideMergesTitle)}" aria-pressed="false">⊘M</button>
         <button type="button" id="btn-only-merges" class="gv-merge-toggle__btn" title="${escapeHtml(ui.onlyMergesTitle)}" aria-pressed="false">⊕M</button>
+      </div>
+      <div class="gv-sync" role="group" aria-label="sync">
+        <button type="button" id="btn-pull" class="gv-sync__btn" title="${escapeHtml(ui.pullTitle)}">↓</button>
+        <button type="button" id="btn-push" class="gv-sync__btn" title="${escapeHtml(ui.pushTitle)}">↑<span id="sync-counts" class="gv-sync__counts" hidden></span></button>
+        <button type="button" id="btn-fetch" class="gv-sync__btn" title="${escapeHtml(ui.fetchTitle)}">⟳</button>
       </div>
       <div id="compare-chip" class="gv-compare-chip" hidden>
         <span class="gv-compare-chip__label" id="compare-chip-label"></span>
@@ -171,7 +179,15 @@ function getPanelClientScript(): string {
   var btnRebaseContinue = document.getElementById("btn-rebase-continue");
   var btnRebaseSkip = document.getElementById("btn-rebase-skip");
   var btnRebaseAbort2 = document.getElementById("btn-rebase-abort2");
+  var repoMenu = document.getElementById("repo-menu");
+  var btnPull = document.getElementById("btn-pull");
+  var btnPush = document.getElementById("btn-push");
+  var btnFetch = document.getElementById("btn-fetch");
+  var syncCounts = document.getElementById("sync-counts");
   if (!root || !detail || !graphWorkspace || !emptyState) return;
+
+  var repoList = [];
+  var selectedRepo = "";
 
   var state = vscode.getState() || {};
   var limit = 200;
@@ -516,7 +532,8 @@ function getPanelClientScript(): string {
       { label: "Merge into current", run: function () { post("branchAction", { action: "branch-merge-into-current", branch: name }); } },
       { label: "Rebase current onto", run: function () { post("branchAction", { action: "branch-rebase-current-onto", branch: name }); } },
       "-",
-      { label: "Push to origin", run: function () { post("branchAction", { action: "branch-push", branch: name }); } },
+      { label: "Push", run: function () { post("branchAction", { action: "branch-push", branch: name }); } },
+      { label: "Force push (with lease)", danger: true, run: function () { post("branchAction", { action: "branch-push-force", branch: name }); } },
       { label: "Rename…", run: function () { post("renameBranch", { branch: name }); } },
       "-",
       { label: "Delete", danger: true, run: function () { post("branchAction", { action: "branch-delete", branch: name }); } },
@@ -782,6 +799,31 @@ function getPanelClientScript(): string {
     btnDismissNotice.addEventListener("click", hideRevNotice);
   }
 
+  if (btnPull) {
+    btnPull.addEventListener("click", function () {
+      vscode.postMessage({ type: "runSync", op: "pull" });
+    });
+  }
+  if (btnPush) {
+    btnPush.addEventListener("click", function () {
+      vscode.postMessage({ type: "runSync", op: "push" });
+    });
+  }
+  if (btnFetch) {
+    btnFetch.addEventListener("click", function () {
+      vscode.postMessage({ type: "runSync", op: "fetch" });
+    });
+  }
+  if (repoPathEl) {
+    repoPathEl.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      toggleRepoMenu();
+    });
+  }
+  document.addEventListener("click", function () {
+    closeRepoMenu();
+  });
+
   if (btnRebaseContinue) {
     btnRebaseContinue.addEventListener("click", function () {
       vscode.postMessage({ type: "continueRebase" });
@@ -903,11 +945,79 @@ function getPanelClientScript(): string {
     var line = base;
     if (vr) line = line + " · " + vr;
     else if (br) line = line + " · " + br;
-    repoPathEl.textContent = line;
+    var multi = repoList.length > 1;
+    repoPathEl.textContent = multi ? line + " ▾" : line;
     repoPathEl.title = repoAbsPath;
+    repoPathEl.classList.toggle("gv-repo-badge--picker", multi);
     if (repoFullEl) {
       repoFullEl.textContent = repoAbsPath;
       repoFullEl.hidden = false;
+    }
+  }
+
+  function repoBaseName(p) {
+    var parts = String(p || "").replace(/\\\\/g, "/").split("/").filter(Boolean);
+    return parts.length ? parts[parts.length - 1] : String(p || "");
+  }
+
+  function closeRepoMenu() {
+    if (repoMenu) repoMenu.hidden = true;
+    if (repoPathEl) repoPathEl.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleRepoMenu() {
+    if (!repoMenu || repoList.length < 2) return;
+    if (!repoMenu.hidden) {
+      closeRepoMenu();
+      return;
+    }
+    repoMenu.innerHTML = "";
+    for (var i = 0; i < repoList.length; i++) {
+      (function (repoPath) {
+        var item = document.createElement("button");
+        item.type = "button";
+        item.className = "gv-repo-menu__item";
+        item.setAttribute("role", "menuitem");
+        if (repoPath === selectedRepo) item.classList.add("gv-repo-menu__item--active");
+        var check = repoPath === selectedRepo ? "✓ " : "\\u00a0\\u00a0";
+        item.textContent = check + repoBaseName(repoPath);
+        item.title = repoPath;
+        item.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          closeRepoMenu();
+          if (repoPath !== selectedRepo) {
+            vscode.postMessage({ type: "selectRepo", root: repoPath });
+          }
+        });
+        repoMenu.appendChild(item);
+      })(repoList[i]);
+    }
+    repoMenu.hidden = false;
+    if (repoPathEl) repoPathEl.setAttribute("aria-expanded", "true");
+  }
+
+  function renderSync(sync) {
+    if (!syncCounts || !btnPush) return;
+    var s = sync || { upstream: null, ahead: 0, behind: 0 };
+    var hasUp = !!s.upstream;
+    if (btnPull) btnPull.disabled = !hasUp;
+    if (!hasUp) {
+      syncCounts.hidden = true;
+      syncCounts.textContent = "";
+      btnPush.title = (UI.publishTitle || "Publish");
+      return;
+    }
+    btnPush.title = (UI.pushTitle || "Push") + " → " + s.upstream;
+    if (s.ahead > 0 || s.behind > 0) {
+      var txt = "";
+      if (s.ahead > 0) txt += " ↑" + s.ahead;
+      if (s.behind > 0) txt += " ↓" + s.behind;
+      syncCounts.textContent = txt;
+      syncCounts.hidden = false;
+      syncCounts.title = UI.aheadBehindTitle || "";
+    } else {
+      syncCounts.hidden = true;
+      syncCounts.textContent = "";
     }
   }
 
@@ -927,7 +1037,10 @@ function getPanelClientScript(): string {
     setRebaseBanner(!!payload.rebaseInProgress);
     setBranchBarVisible(true);
     renderBranchTree(payload.branchTree || { current: "", locals: [], remotes: [] });
+    repoList = Array.isArray(payload.repos) ? payload.repos : [];
+    selectedRepo = payload.selectedRepo || payload.repoRoot || "";
     setRepoHeader(payload.repoRoot || "", payload.branch || "", payload.viewRev || "");
+    renderSync(payload.sync);
 
     // Clean up any previous virtual-scroll handler before re-rendering.
     var prevCanvas = root.parentElement;

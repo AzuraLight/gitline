@@ -41,6 +41,16 @@ export type GitStashEntry = {
   dateSec: number;
 };
 
+/** Upstream tracking state of the current branch for the remote-sync toolbar. */
+export type GitSyncState = {
+  /** Upstream ref like `origin/main`, or null when the branch has no upstream. */
+  upstream: string | null;
+  /** Commits on HEAD not on upstream. */
+  ahead: number;
+  /** Commits on upstream not on HEAD. */
+  behind: number;
+};
+
 export type GitCommitFile = {
   /** Single-letter status: A/M/D/R/C/T. */
   status: string;

@@ -24,6 +24,13 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 - **Auto-refresh** — `.git/HEAD`, `refs/**`, `index` watched. Commit, checkout, fetch, stage — graph reloads automatically.
 - **Virtual scrolling** — only the visible window of commit rows is in the DOM. Stays responsive on large histories.
 
+### Multi-repo and remote sync
+
+- **Repo picker** — in a multi-root workspace or a monorepo with several checkouts, the repo name in the header becomes a picker (▾). Switch repos and the whole view follows; the choice is remembered per workspace.
+- **Pull / Push / Fetch** buttons in the header. Push targets the current branch's upstream (publishing to `origin` with `-u` when unset); Pull is fast-forward-only; Fetch runs `--all --prune`.
+- **`↑ahead ↓behind` badge** shows the current branch versus its upstream.
+- **Force push (with lease)** for rebased/amended branches, from the branch context menu.
+
 ### Working tree and stashes
 
 - **Working changes** row at the top of the graph when there are uncommitted changes (`3 staged · 5 modified · 2 untracked`). Click to focus the SCM view.
@@ -45,7 +52,7 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 | Target | Actions |
 |---|---|
 | **Commit** | Checkout (detached) · Create branch / tag here · Cherry-pick · Revert · Merge / Rebase · Interactive rebase from here · Reset (soft / mixed / hard) · Mark / compare with marked · Copy SHA / message · Open patch |
-| **Local branch** | Checkout · Merge / Rebase · Push · Rename · Delete / Force delete · Copy name |
+| **Local branch** | Checkout · Merge / Rebase · Push · Force push (with lease) · Rename · Delete / Force delete · Copy name |
 | **Remote branch** | Create tracking branch · Fetch · Merge · Delete on remote · Copy name |
 | **Stash** | Apply · Pop · Drop · Copy ref |
 
@@ -66,6 +73,9 @@ For per-file history: right-click any file → **Gitline: File History**, or use
 |---|---|
 | `Gitline: Open Commit Panel` | Reveals the graph panel and reloads. |
 | `Gitline: File History` | Opens the graph filtered to the current file. |
+| `Gitline: Pull` | Fast-forward pull of the active repo's current branch. |
+| `Gitline: Push` | Push the current branch to its upstream (or publish to `origin`). |
+| `Gitline: Fetch All` | `git fetch --all --prune` on the active repo. |
 
 ## How it compares
 
@@ -90,10 +100,10 @@ For per-file history: right-click any file → **Gitline: File History**, or use
 
 ## Limitations
 
-- Single-repo workspaces. Multi-root with multiple repos picks the first.
-- Push targets `origin` and there is no `--force-with-lease`, so a branch
-  rewritten by rebase can't be pushed from the panel yet.
-- No top-level pull / fetch-all command (per-branch fetch only).
+- Working-tree writes (commit / amend / stash push) are delegated to the SCM view.
+- Merge and cherry-pick conflicts surface raw Git errors; only rebase has an
+  in-panel Continue / Skip / Abort recovery banner.
+- Tags are lightweight only (no annotated tags yet).
 
 These are on the roadmap.
 

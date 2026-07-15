@@ -2,7 +2,13 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { registerCommitShowProvider } from "./commitShowProvider";
 import { resolveRepoRootForFile } from "./gitExec";
-import { registerGitlinePanelWebview, revealCommitPanelAndReload, revealCommitPanelWithPath } from "./panelWebview";
+import { fetchAll, pullCurrent, pushCurrent } from "./gitPanelActions";
+import {
+  getActiveRepoRoot,
+  registerGitlinePanelWebview,
+  revealCommitPanelAndReload,
+  revealCommitPanelWithPath,
+} from "./panelWebview";
 
 function toRepoRelativePath(repoRoot: string, filePath: string): string {
   const resolvedRoot = path.resolve(repoRoot);
@@ -50,7 +56,28 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   );
 
-  context.subscriptions.push(openGraph, openFileHistory);
+  const runSyncCommand = (op: "pull" | "push" | "fetch") => async (): Promise<void> => {
+    const root = await getActiveRepoRoot();
+    if (!root) {
+      void vscode.window.showWarningMessage(vscode.l10n.t("Gitline: Could not find a Git repository."));
+      return;
+    }
+    try {
+      if (op === "pull") await pullCurrent(root);
+      else if (op === "push") await pushCurrent(root);
+      else await fetchAll(root);
+      await revealCommitPanelAndReload();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      void vscode.window.showErrorMessage(vscode.l10n.t("Gitline: {0}", msg));
+    }
+  };
+
+  const pull = vscode.commands.registerCommand("gitline.pull", runSyncCommand("pull"));
+  const push = vscode.commands.registerCommand("gitline.push", runSyncCommand("push"));
+  const fetchAllCmd = vscode.commands.registerCommand("gitline.fetchAll", runSyncCommand("fetch"));
+
+  context.subscriptions.push(openGraph, openFileHistory, pull, push, fetchAllCmd);
 }
 
 export function deactivate(): void {}

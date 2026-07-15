@@ -21,6 +21,7 @@ export const BRANCH_ACTION_IDS = [
   "branch-delete-force",
   "branch-fetch",
   "branch-push",
+  "branch-push-force",
   "branch-merge-into-current",
   "branch-rebase-current-onto",
   "branch-checkout-remote",
@@ -120,9 +121,23 @@ export async function runBranchAction(cwd: string, action: BranchActionId, branc
       }
       return;
     }
-    case "branch-push":
-      await runGitCommand(cwd, ["push", "-u", "origin", name]);
+    case "branch-push": {
+      // Push to the branch's configured upstream remote when it has one;
+      // otherwise publish it against origin and set tracking (`-u`).
+      const remote = await branchUpstreamRemote(cwd, name);
+      if (remote) {
+        await runGitCommand(cwd, ["push", remote, name]);
+      } else {
+        await runGitCommand(cwd, ["push", "-u", "origin", name]);
+      }
       return;
+    }
+    case "branch-push-force": {
+      // Safe force for a rebased/amended branch: refuses if the remote moved.
+      const remote = (await branchUpstreamRemote(cwd, name)) ?? "origin";
+      await runGitCommand(cwd, ["push", "--force-with-lease", remote, name]);
+      return;
+    }
     case "branch-merge-into-current":
       await runGitCommand(cwd, ["merge", name]);
       return;
@@ -178,4 +193,35 @@ export async function renameBranch(cwd: string, oldName: string, newName: string
   const o = assertRefName(oldName);
   const n = assertRefName(newName);
   await runGitCommand(cwd, ["branch", "-m", o, n]);
+}
+
+/** Remote name of a local branch's configured upstream, or null when unset. */
+async function branchUpstreamRemote(cwd: string, name: string): Promise<string | null> {
+  try {
+    const out = (
+      await runGitCommand(cwd, ["config", "--get", `branch.${name}.remote`])
+    ).trim();
+    return out.length > 0 ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Fast-forward pull of the current branch. Surfaces conflicts/divergence as errors. */
+export async function pullCurrent(cwd: string): Promise<void> {
+  await runGitCommand(cwd, ["pull", "--ff-only"]);
+}
+
+/** Fetch every remote and prune deleted remote-tracking refs. */
+export async function fetchAll(cwd: string): Promise<void> {
+  await runGitCommand(cwd, ["fetch", "--all", "--prune"]);
+}
+
+/** Push the current branch to its upstream, publishing to origin if unset. */
+export async function pushCurrent(cwd: string): Promise<void> {
+  const branch = (await runGitCommand(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
+  if (!branch || branch === "HEAD") {
+    throw new Error("Cannot push: detached HEAD (no current branch).");
+  }
+  await runBranchAction(cwd, "branch-push", branch);
 }

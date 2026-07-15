@@ -63,6 +63,14 @@
   "Search commits  ·  text · @author · sha": "Search commits  ·  text · @author · sha",
   "Tag name (at {0})": "Tag name (at {0})",
   "Working changes": "Working changes",
+  "Switch repository": "Switch repository",
+  "Pull (fast-forward)": "Pull (fast-forward)",
+  "Push": "Push",
+  "Publish branch (set upstream to origin)": "Publish branch (set upstream to origin)",
+  "Fetch all remotes": "Fetch all remotes",
+  "Commits ahead / behind upstream": "Commits ahead / behind upstream",
+  "Push {0} to its remote?": "Push {0} to its remote?",
+  "Force-push {0} (with lease)? Overwrites the remote branch.": "Force-push {0} (with lease)? Overwrites the remote branch.",
   "{0} ({1})": "{0} ({1})",
   "{0} → {1} ({2})": "{0} → {1} ({2})"
 }

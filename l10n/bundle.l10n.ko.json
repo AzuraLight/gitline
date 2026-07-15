@@ -69,5 +69,13 @@
   "Dismiss": "닫기",
   "A rebase is paused. Resolve conflicts in the SCM view, then continue.": "리베이스가 일시 중지됨. SCM 뷰에서 충돌을 해결한 뒤 계속하세요.",
   "Continue": "계속",
-  "Skip": "건너뛰기"
+  "Skip": "건너뛰기",
+  "Switch repository": "리포지터리 전환",
+  "Pull (fast-forward)": "풀 (fast-forward)",
+  "Push": "푸시",
+  "Publish branch (set upstream to origin)": "브랜치 게시 (origin에 upstream 설정)",
+  "Fetch all remotes": "모든 리모트 페치",
+  "Commits ahead / behind upstream": "upstream 대비 앞선/뒤처진 커밋 수",
+  "Push {0} to its remote?": "{0}을(를) 해당 리모트에 push 할까요?",
+  "Force-push {0} (with lease)? Overwrites the remote branch.": "{0}을(를) 강제 push(with lease) 할까요? 리모트 브랜치를 덮어씁니다."
 }

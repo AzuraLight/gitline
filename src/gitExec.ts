@@ -7,6 +7,7 @@ import type {
   GitCommitRef,
   GitCommitRow,
   GitStashEntry,
+  GitSyncState,
   GitWorkingState,
 } from "./types";
 
@@ -106,6 +107,38 @@ export async function readCurrentBranchName(cwd: string): Promise<string> {
     return b.length > 0 ? b : "";
   } catch {
     return "";
+  }
+}
+
+/**
+ * Upstream tracking state of the current branch. Returns `upstream: null` when
+ * the branch has no upstream (or HEAD is detached); ahead/behind default to 0.
+ */
+export async function readSyncState(cwd: string): Promise<GitSyncState> {
+  let upstream: string | null = null;
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+      { cwd, maxBuffer: 1024 * 1024, encoding: "utf8" },
+    );
+    const u = (typeof stdout === "string" ? stdout : String(stdout)).trim();
+    upstream = u.length > 0 ? u : null;
+  } catch {
+    return { upstream: null, ahead: 0, behind: 0 };
+  }
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
+      { cwd, maxBuffer: 1024 * 1024, encoding: "utf8" },
+    );
+    const parts = (typeof stdout === "string" ? stdout : String(stdout)).trim().split(/\s+/);
+    const ahead = Number(parts[0]) || 0;
+    const behind = Number(parts[1]) || 0;
+    return { upstream, ahead, behind };
+  } catch {
+    return { upstream, ahead: 0, behind: 0 };
   }
 }
 

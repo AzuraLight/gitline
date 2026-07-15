@@ -51,6 +51,12 @@ export type CommitGraphWebviewUi = {
   rebaseInProgressNotice: string;
   rebaseContinue: string;
   rebaseSkip: string;
+  repoPickerTitle: string;
+  pullTitle: string;
+  pushTitle: string;
+  publishTitle: string;
+  fetchTitle: string;
+  aheadBehindTitle: string;
 };
 
 /** Localized strings for the commit graph webview. */
@@ -107,6 +113,12 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     rebaseInProgressNotice: vscode.l10n.t("A rebase is paused. Resolve conflicts in the SCM view, then continue."),
     rebaseContinue: vscode.l10n.t("Continue"),
     rebaseSkip: vscode.l10n.t("Skip"),
+    repoPickerTitle: vscode.l10n.t("Switch repository"),
+    pullTitle: vscode.l10n.t("Pull (fast-forward)"),
+    pushTitle: vscode.l10n.t("Push"),
+    publishTitle: vscode.l10n.t("Publish branch (set upstream to origin)"),
+    fetchTitle: vscode.l10n.t("Fetch all remotes"),
+    aheadBehindTitle: vscode.l10n.t("Commits ahead / behind upstream"),
   };
 }
 

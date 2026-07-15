@@ -1,6 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { tryRootFromBuiltInGit } from "./gitExtensionRoots";
+import { listRootsFromBuiltInGit, tryRootFromBuiltInGit } from "./gitExtensionRoots";
 import { getRepoRoot, resolveRepoRootForFile } from "./gitExec";
 
 function pickCwd(uri?: vscode.Uri): string | undefined {
@@ -76,4 +76,31 @@ export async function pickCommitGraphRepoRoot(): Promise<string | null> {
   }
 
   return null;
+}
+
+/**
+ * All Git repo roots available in the current window, for the multi-repo picker.
+ * Merges the built-in Git extension's repositories with each workspace folder
+ * resolved to its Git root, then dedups (normalized) and sorts.
+ */
+export async function listRepoRoots(): Promise<string[]> {
+  const norm = new Map<string, string>();
+  const add = (p: string | null | undefined): void => {
+    if (!p) {
+      return;
+    }
+    const key = path.resolve(p);
+    if (!norm.has(key)) {
+      norm.set(key, key);
+    }
+  };
+
+  for (const r of await listRootsFromBuiltInGit()) {
+    add(r);
+  }
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    add(await getRepoRoot(folder.uri.fsPath));
+  }
+
+  return [...norm.values()].sort((a, b) => a.localeCompare(b));
 }

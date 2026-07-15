@@ -2,7 +2,7 @@
   "name": "gitline",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "AzuraLight",
   "author": {
     "name": "AzuraLight"
@@ -58,6 +58,24 @@
         "title": "%command.openFileHistory.title%",
         "category": "Gitline",
         "icon": "$(history)"
+      },
+      {
+        "command": "gitline.pull",
+        "title": "%command.pull.title%",
+        "category": "Gitline",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "gitline.push",
+        "title": "%command.push.title%",
+        "category": "Gitline",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "gitline.fetchAll",
+        "title": "%command.fetchAll.title%",
+        "category": "Gitline",
+        "icon": "$(sync)"
       }
     ],
     "viewsContainers": {
