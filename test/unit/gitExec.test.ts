@@ -58,9 +58,7 @@ describe("git readers against a real repository", function () {
     repo.append("src/deep/dir/New.java", "d\n");
     repo.append("한글파일.txt", "둘\n");
     renameCommit = repo.commitAll("rename and edit");
-    for (let i = 1; i <= 230; i++) {
-      repo.commitEmpty(`c${i}`);
-    }
+    repo.commitEmptyMany(230, "c");
   });
 
   after(() => repo.dispose());

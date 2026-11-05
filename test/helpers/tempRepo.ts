@@ -41,6 +41,30 @@ export class TempRepo {
     return this.head();
   }
 
+  /**
+   * Appends `count` empty commits named `${prefix}1`…`${prefix}N` on the current branch with a single
+   * `git fast-import` process — spawning git per commit takes minutes on Windows CI runners.
+   */
+  commitEmptyMany(count: number, prefix: string): void {
+    const branch = this.git("symbolic-ref", "HEAD").trim();
+    const parent = this.head();
+    const stream: string[] = [];
+    for (let i = 1; i <= count; i++) {
+      const msg = `${prefix}${i}`;
+      const when = `${1_700_000_000 + i} +0000`;
+      stream.push(
+        `commit ${branch}`,
+        `committer Gitline Test <test@example.com> ${when}`,
+        `data ${Buffer.byteLength(msg)}`,
+        msg,
+      );
+      if (i === 1) stream.push(`from ${parent}`);
+      stream.push("");
+    }
+    execFileSync("git", ["fast-import", "--quiet"], { cwd: this.root, input: stream.join("\n") + "\n" });
+    this.git("reset", "-q", "--hard", branch);
+  }
+
   head(): string {
     return this.git("rev-parse", "HEAD").trim();
   }
