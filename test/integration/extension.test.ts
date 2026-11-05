@@ -72,9 +72,13 @@ describe("Gitline in VS Code", function () {
 
       await config.update("enabled", false, vscode.ConfigurationTarget.Global);
       assert.strictEqual(await waitFor(() => api.inlineBlameText(), (t) => t === undefined), undefined);
-      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
     } finally {
-      repo.dispose();
+      await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+      try {
+        repo.dispose();
+      } catch {
+        // VS Code's file watchers can keep the folder locked on Windows; it is in the OS temp dir anyway.
+      }
     }
   });
 });

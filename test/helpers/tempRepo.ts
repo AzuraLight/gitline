@@ -69,7 +69,8 @@ export class TempRepo {
     return this.git("rev-parse", "HEAD").trim();
   }
 
+  /** Windows refuses to delete files another process still has open, so retry briefly. */
   dispose(): void {
-    fs.rmSync(this.root, { recursive: true, force: true });
+    fs.rmSync(this.root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 }
