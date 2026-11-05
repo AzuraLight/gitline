@@ -83,8 +83,33 @@
         "title": "%command.fetchAll.title%",
         "category": "Gitline",
         "icon": "$(sync)"
+      },
+      {
+        "command": "gitline.toggleInlineBlame",
+        "title": "%command.toggleInlineBlame.title%",
+        "category": "Gitline"
+      },
+      {
+        "command": "gitline.revealCommit",
+        "title": "%command.revealCommit.title%",
+        "category": "Gitline"
+      },
+      {
+        "command": "gitline.openCommitPatch",
+        "title": "%command.openCommitPatch.title%",
+        "category": "Gitline"
       }
     ],
+    "configuration": {
+      "title": "Gitline",
+      "properties": {
+        "gitline.inlineBlame.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "%config.inlineBlame.enabled%"
+        }
+      }
+    },
     "viewsContainers": {
       "panel": [
         {
@@ -120,6 +145,16 @@
           "command": "gitline.openFileHistory",
           "when": "resourceScheme == file",
           "group": "gitline@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "gitline.revealCommit",
+          "when": "false"
+        },
+        {
+          "command": "gitline.openCommitPatch",
+          "when": "false"
         }
       ]
     }

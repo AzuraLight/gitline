@@ -287,6 +287,17 @@
     rebaseCommits: function (d) { rebaseEditor.setCommits(d.commits); },
     rebaseError: function (d) { rebaseEditor.showError(d.message); },
     rebaseDone: function () { rebaseEditor.close(); },
+    // "Open in Gitline graph" from inline blame: search for the SHA and open that commit.
+    revealCommit: function (d) {
+      if (typeof d.hash !== "string" || !d.hash) return;
+      S.selectedRev = "";
+      S.pathFilter = "";
+      applyPathFilter();
+      searchInput.value = d.hash.slice(0, 12);
+      setQuery(searchInput.value);
+      S.currentHash = d.hash; // the row renders selected and reopenCurrentCommit opens it
+      commitFilterChange();
+    },
     setPathFilter: function (d) {
       S.pathFilter = typeof d.path === "string" ? d.path : "";
       applyPathFilter();

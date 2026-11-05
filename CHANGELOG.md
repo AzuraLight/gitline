@@ -9,6 +9,18 @@
   chains collapse into one row (`src/main/java/com/example`), each folder shows how
   many files changed under it, and folders open and close with click,
   Enter / Space or ← / →.
+- **Inline blame, opt-in** (#2). Turn on `gitline.inlineBlame.enabled` (or run
+  *Gitline: Toggle Inline Blame*) to see `author, when · subject` at the end of the
+  current line. The hover links to the commit in the Gitline graph and to its patch.
+  Unsaved edits are followed, and results are cached until the text or HEAD changes.
+- README screenshots (light / dark) and GIFs (#3).
+
+### Fixed
+
+- **File History said "This file is outside the repository" for projects opened
+  through a symlink** (and for any
+  path where VS Code and git disagree, such as macOS `/var` → `/private/var`). Paths
+  are now resolved through symlinks before being made repository-relative.
 
 ### Internal
 

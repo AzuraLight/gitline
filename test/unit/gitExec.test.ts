@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as os from "os";
 import {
   looksLikeHash,
   parseChangedFiles,
@@ -8,6 +9,7 @@ import {
   readFirstParent,
   readRecentCommits,
   readStashFiles,
+  repoRelativePath,
 } from "../../src/gitExec";
 import { TempRepo } from "../helpers/tempRepo";
 
@@ -128,5 +130,20 @@ describe("stash files", function () {
     assert.deepStrictEqual(await readStashFiles(repo.root, "stash@{0}"), [
       { status: "M", path: "a.txt", insertions: 1, deletions: 0 },
     ]);
+  });
+});
+
+describe("repoRelativePath", () => {
+  it("resolves symlinks on both sides (macOS /var → /private/var)", () => {
+    const repo = new TempRepo();
+    try {
+      repo.write("a/b.txt", "x\n");
+      const gitRoot = repo.git("rev-parse", "--show-toplevel").trim();
+      assert.strictEqual(repoRelativePath(gitRoot, `${repo.root}/a/b.txt`), "a/b.txt");
+      assert.strictEqual(repoRelativePath(repo.root, `${gitRoot}/a/b.txt`), "a/b.txt");
+      assert.ok(repoRelativePath(repo.root, os.tmpdir()).startsWith(".."));
+    } finally {
+      repo.dispose();
+    }
   });
 });

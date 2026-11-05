@@ -608,6 +608,18 @@ export async function revealCommitPanelWithPath(relativePath: string): Promise<v
   }
 }
 
+/**
+ * Opens the panel on `root` (switching the repo picker if needed) with `sha` selected.
+ * The webview finds it through the SHA search, so it works however old the commit is.
+ */
+export async function revealCommitInPanel(root: string, sha: string): Promise<void> {
+  if ((await getActiveRepoRoot()) !== root) {
+    await setSelectedRepo(root);
+  }
+  await revealCommitPanelAndReload();
+  panelViewRef?.webview.postMessage({ type: "revealCommit", hash: sha });
+}
+
 /** Focuses the bottom commit panel and asks the webview to reload graph data. */
 export async function revealCommitPanelAndReload(): Promise<void> {
   if (panelViewRef) {

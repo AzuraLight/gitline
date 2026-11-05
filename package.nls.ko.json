@@ -8,5 +8,9 @@
   "command.fetchAll.title": "Gitline: 전체 페치 (Fetch All)",
   "viewContainer.panel.title": "Gitline",
   "view.panel.name": "Gitline",
-  "view.panel.contextualTitle": "Gitline"
+  "view.panel.contextualTitle": "Gitline",
+  "command.toggleInlineBlame.title": "Gitline: 인라인 Blame 켜기/끄기",
+  "command.revealCommit.title": "Gitline: 그래프에서 커밋 보기",
+  "command.openCommitPatch.title": "Gitline: 커밋 패치 열기",
+  "config.inlineBlame.enabled": "현재 줄을 마지막으로 바꾼 사람, 시점, 커밋 메시지를 줄 끝에 표시합니다. 기본값은 꺼짐입니다."
 }

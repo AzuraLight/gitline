@@ -82,5 +82,10 @@
   "Force-push {0} (with lease)? Overwrites the remote branch.": "{0}을(를) 강제 push(with lease) 할까요? 리모트 브랜치를 덮어씁니다.",
   "Gitline: Pulling…": "Gitline: 가져오는 중…",
   "Gitline: Pushing…": "Gitline: 올리는 중…",
-  "Gitline: Fetching…": "Gitline: 원격 정보를 받는 중…"
+  "Gitline: Fetching…": "Gitline: 원격 정보를 받는 중…",
+  "You · Uncommitted changes": "나 · 커밋하지 않은 변경",
+  "Open in Gitline graph": "Gitline 그래프에서 열기",
+  "Open commit patch": "커밋 패치 열기",
+  "Gitline: Inline blame on": "Gitline: 인라인 Blame 켜짐",
+  "Gitline: Inline blame off": "Gitline: 인라인 Blame 꺼짐"
 }

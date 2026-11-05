@@ -77,5 +77,10 @@
   "{0} → {1} ({2})": "{0} → {1} ({2})",
   "Gitline: Pulling…": "Gitline: Pulling…",
   "Gitline: Pushing…": "Gitline: Pushing…",
-  "Gitline: Fetching…": "Gitline: Fetching…"
+  "Gitline: Fetching…": "Gitline: Fetching…",
+  "You · Uncommitted changes": "You · Uncommitted changes",
+  "Open in Gitline graph": "Open in Gitline graph",
+  "Open commit patch": "Open commit patch",
+  "Gitline: Inline blame on": "Gitline: Inline blame on",
+  "Gitline: Inline blame off": "Gitline: Inline blame off"
 }

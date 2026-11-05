@@ -1,5 +1,6 @@
+import * as fs from "fs";
 import * as path from "path";
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 import type {
   GitBranchTreePayload,
@@ -51,6 +52,49 @@ async function execGit(cwd: string, args: string[], options: ExecOptions = {}): 
     }
     throw new Error(parts.join("\n") || "Git command failed");
   }
+}
+
+/**
+ * `git blame --porcelain` for `repoPath` as it currently reads in the editor: `contents` goes to
+ * `--contents -` on stdin, so line numbers still match after unsaved edits.
+ */
+export function readBlamePorcelain(cwd: string, repoPath: string, contents: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", ["-c", "core.quotePath=false", "blame", "--porcelain", "--contents", "-", "--", repoPath], {
+      cwd,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    });
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    child.stdout.on("data", (b: Buffer) => out.push(b));
+    child.stderr.on("data", (b: Buffer) => err.push(b));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve(Buffer.concat(out).toString("utf8"));
+      else reject(new Error(Buffer.concat(err).toString("utf8").trim() || `git blame exited with ${code}`));
+    });
+    child.stdin.on("error", () => {
+      /* git exits early for untracked files; the close handler reports it */
+    });
+    child.stdin.end(contents, "utf8");
+  });
+}
+
+function realPath(p: string): string {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+/**
+ * `fsPath` relative to `repoRoot`, with `/` separators. Both are resolved through symlinks first:
+ * git reports the real root (macOS /var → /private/var, a symlinked checkout), while VS Code keeps
+ * the path the user opened. Returns "" for the root itself and a path starting ".." when outside.
+ */
+export function repoRelativePath(repoRoot: string, fsPath: string): string {
+  return path.relative(realPath(repoRoot), realPath(fsPath)).split(path.sep).join("/");
 }
 
 /** Runs `git` for local operations. cwd must be the repository root. */

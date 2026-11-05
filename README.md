@@ -56,6 +56,15 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 - **Compare two commits** — mark a commit, then "Compare with marked" on another to see the changed files or full patch between them.
 - **Interactive rebase** — right-click a commit → *Interactive rebase from here…* opens an in-panel todo editor (reorder, `pick` / `squash` / `fixup` / `drop`). When a rebase pauses on a conflict, a banner offers **Continue / Skip / Abort** after you resolve in the SCM view.
 
+### Inline blame (opt-in)
+
+Off by default. Turn it on with the `gitline.inlineBlame.enabled` setting or **Gitline: Toggle Inline Blame**.
+
+- The line under the cursor ends with `author, 3 weeks ago · commit subject` — only that line, so the editor stays quiet.
+- Hover it for the full commit, with **Open in Gitline graph** (selects the commit in the panel) and **Open commit patch**.
+- Follows unsaved edits: new lines read *You · Uncommitted changes* and the rest keep their blame.
+- One `git blame` per file, cached until the text changes or HEAD / a branch moves.
+
 ### Right-click context menus
 
 | Target | Actions |
@@ -85,6 +94,13 @@ For per-file history: right-click any file → **Gitline: File History**, or use
 | `Gitline: Pull` | Fast-forward pull of the active repo's current branch. |
 | `Gitline: Push` | Push the current branch to its upstream (or publish to `origin`). |
 | `Gitline: Fetch All` | `git fetch --all --prune` on the active repo. |
+| `Gitline: Toggle Inline Blame` | Turns the current-line blame annotation on or off. |
+
+## Settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| `gitline.inlineBlame.enabled` | `false` | Show who last changed the current line, when, and why — at the end of the line. |
 
 ## How it compares
 

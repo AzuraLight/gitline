@@ -8,5 +8,9 @@
   "command.fetchAll.title": "Gitline: Fetch All",
   "viewContainer.panel.title": "Gitline",
   "view.panel.name": "Gitline",
-  "view.panel.contextualTitle": "Gitline"
+  "view.panel.contextualTitle": "Gitline",
+  "command.toggleInlineBlame.title": "Gitline: Toggle Inline Blame",
+  "command.revealCommit.title": "Gitline: Show Commit in Graph",
+  "command.openCommitPatch.title": "Gitline: Open Commit Patch",
+  "config.inlineBlame.enabled": "Show who last changed the current line, when, and why — at the end of the line. Off by default."
 }
