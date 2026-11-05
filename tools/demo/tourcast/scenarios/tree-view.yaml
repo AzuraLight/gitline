@@ -1,0 +1,45 @@
+# README GIF 2 — changed files as a folder tree (issue #1).
+#   node tools/demo/build.js list
+#   tourcast record tools/demo/tourcast/scenarios/tree-view.yaml -o out-demo/tree-view.mp4
+version: 1
+profile: gitline
+seed: 1
+
+cursor:
+  move_duration: 0.8
+  emphasize: true
+
+camera:
+  max_zoom: 1.8
+  close_up: { margin: 90, duration: 0.7 }
+  close_out: { duration: 0.6 }
+  spotlight: { opacity: 0.45, feather: 24, padding: 6, fade: 0.25 }
+
+steps:
+  - goto: /out-demo/index.html?theme=dark
+  - wait_ready: graph
+    hold: 0.8
+
+  - click: commit.merge_checkout
+    caption: A commit with deep Java paths
+  - wait_ready: list
+    hold: 1.4
+
+  - click: files.view_toggle
+    caption: Switch to tree
+    camera: { type: close_up, zoom: 1.6, margin: 260, duration: 0.8 }
+  - wait_ready: tree
+    hold: 1.8
+
+  - click: tree.folder_payment
+    caption: Collapse a folder
+    hold: 0.9
+  - click: tree.folder_payment
+    hold: 1.2
+
+  - click: files.view_toggle
+    caption: Back to the flat list
+  - wait_ready: list
+    hold: 1.2
+  - camera: close_out
+    hold: 0.8

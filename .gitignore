@@ -5,3 +5,4 @@ out
 legacy/*
 out-test
 .vscode-test
+out-demo

@@ -4,7 +4,12 @@ A clean, fast commit graph for VS Code — **free, MIT, no account, no telemetry
 
 Gitline is a focused alternative to GitLens that puts a real Git graph in the bottom panel. SVG lanes, color-coded branches, working changes and stashes inline, file-level diff with one click, right-click actions for everyday Git work.
 
-![Commit graph in the bottom panel](media/icon.png)
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/graph-light.png">
+  <img src="docs/images/graph-dark.png" alt="Gitline commit graph: branch sidebar, colored lanes with merges, and the changed files of the selected merge commit">
+</picture>
+
+![Opening a merge commit, showing one branch's history, then scrolling older history](docs/images/graph-tour.gif)
 
 ## Why Gitline
 
@@ -42,6 +47,9 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 - Right pane shows the **changed files** with status badge (`A` / `M` / `D` / `R` / `C`) and `+N −M` line counts.
 - Click a file → native VS Code diff editor, with rename-aware before/after paths.
 - "Patch" button opens the full `git show` as a tab.
+- **List / Tree toggle** — show the files as a folder tree. Single-child folders collapse into one row (`java/com/acme/shop/checkout`), each folder shows how many files changed under it, and folders open and close with click, Enter / Space or ← / →. The choice is remembered per workspace.
+
+![Switching the changed files to a tree and collapsing a folder](docs/images/tree-view.gif)
 
 ### Compare and rewrite
 

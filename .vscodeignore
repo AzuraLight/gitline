@@ -11,3 +11,6 @@ test/**
 .vscode-test.mjs
 tsconfig.test.json
 .github/**
+tools/**
+out-demo/**
+docs/**

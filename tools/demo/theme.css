@@ -1,0 +1,114 @@
+/* VS Code "Dark Modern" / "Light Modern" values for the variables the webview reads.
+   VS Code injects these into real webviews; the demo page has to supply them itself. */
+:root {
+  --vscode-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --vscode-font-size: 13px;
+  --vscode-editor-font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --vscode-foreground: #cccccc;
+  --vscode-descriptionForeground: #9d9d9d;
+  --vscode-editor-background: #1f1f1f;
+  --vscode-sideBar-background: #181818;
+  --vscode-sideBarSectionHeader-background: #181818;
+  --vscode-panel-border: #2b2b2b;
+  --vscode-focusBorder: #0078d4;
+  --vscode-list-hoverBackground: #2a2d2e;
+  --vscode-list-activeSelectionBackground: #04395e;
+  --vscode-list-activeSelectionForeground: #ffffff;
+  --vscode-editor-inactiveSelectionBackground: #3a3d41;
+  --vscode-input-background: #313131;
+  --vscode-input-foreground: #cccccc;
+  --vscode-input-border: #3c3c3c;
+  --vscode-input-placeholderForeground: #989898;
+  --vscode-button-background: #0078d4;
+  --vscode-button-hoverBackground: #026ec1;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-border: #ffffff12;
+  --vscode-button-secondaryBackground: #313131;
+  --vscode-button-secondaryHoverBackground: #3c3c3c;
+  --vscode-button-secondaryForeground: #cccccc;
+  --vscode-badge-background: #616161;
+  --vscode-badge-foreground: #f8f8f8;
+  --vscode-menu-background: #1f1f1f;
+  --vscode-menu-foreground: #cccccc;
+  --vscode-menu-border: #454545;
+  --vscode-menu-selectionBackground: #0078d4;
+  --vscode-menu-selectionForeground: #ffffff;
+  --vscode-menu-separatorBackground: #454545;
+  --vscode-widget-shadow: #0000005c;
+  --vscode-editorWidget-background: #202020;
+  --vscode-textLink-foreground: #4daafc;
+  --vscode-textCodeBlock-background: #2b2b2b;
+  --vscode-errorForeground: #f85149;
+  --vscode-editorWarning-foreground: #cca700;
+  --vscode-editorInfo-foreground: #3794ff;
+  --vscode-charts-green: #89d185;
+  --vscode-charts-blue: #3794ff;
+  --vscode-charts-purple: #b180d7;
+  --vscode-charts-yellow: #cca700;
+  --vscode-charts-orange: #d18616;
+  --vscode-terminal-ansiGreen: #0dbc79;
+  --vscode-terminal-ansiCyan: #11a8cd;
+  --vscode-terminal-ansiBlue: #2472c8;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --vscode-foreground: #3b3b3b;
+  --vscode-descriptionForeground: #3b3b3b;
+  --vscode-editor-background: #ffffff;
+  --vscode-sideBar-background: #f8f8f8;
+  --vscode-sideBarSectionHeader-background: #f8f8f8;
+  --vscode-panel-border: #e5e5e5;
+  --vscode-focusBorder: #005fb8;
+  --vscode-list-hoverBackground: #f2f2f2;
+  --vscode-list-activeSelectionBackground: #e8e8e8;
+  --vscode-list-activeSelectionForeground: #000000;
+  --vscode-editor-inactiveSelectionBackground: #e5ebf1;
+  --vscode-input-background: #ffffff;
+  --vscode-input-foreground: #3b3b3b;
+  --vscode-input-border: #cecece;
+  --vscode-input-placeholderForeground: #767676;
+  --vscode-button-background: #005fb8;
+  --vscode-button-hoverBackground: #0258a8;
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-border: #0000001a;
+  --vscode-button-secondaryBackground: #e5e5e5;
+  --vscode-button-secondaryHoverBackground: #cccccc;
+  --vscode-button-secondaryForeground: #3b3b3b;
+  --vscode-badge-background: #cccccc;
+  --vscode-badge-foreground: #3b3b3b;
+  --vscode-menu-background: #ffffff;
+  --vscode-menu-foreground: #3b3b3b;
+  --vscode-menu-border: #cecece;
+  --vscode-menu-selectionBackground: #005fb8;
+  --vscode-menu-selectionForeground: #ffffff;
+  --vscode-menu-separatorBackground: #d4d4d4;
+  --vscode-widget-shadow: #00000029;
+  --vscode-editorWidget-background: #f8f8f8;
+  --vscode-textLink-foreground: #005fb8;
+  --vscode-textCodeBlock-background: #f8f8f8;
+  --vscode-errorForeground: #f85149;
+  --vscode-editorWarning-foreground: #bf8803;
+  --vscode-editorInfo-foreground: #1a85ff;
+  --vscode-charts-green: #388a34;
+  --vscode-charts-blue: #1a85ff;
+  --vscode-charts-purple: #652d90;
+  --vscode-charts-yellow: #bf8803;
+  --vscode-charts-orange: #d18616;
+  --vscode-terminal-ansiGreen: #00bc00;
+  --vscode-terminal-ansiCyan: #0598bc;
+  --vscode-terminal-ansiBlue: #0451a5;
+}
+
+body {
+  margin: 0;
+  height: 100vh;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}

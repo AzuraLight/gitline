@@ -1,0 +1,48 @@
+# tourcast profile for the Gitline demo page (tools/demo/build.js + mock-host.js).
+# Serve the repo root first:  python3 -m http.server 8790
+version: 1
+name: gitline
+
+base_url: http://localhost:8790
+
+world:
+  viewport: [1200, 680]
+  device_scale_factor: 2
+  locale: en-US
+  timezone: UTC
+  color_scheme: dark
+
+capture:
+  size: [2400, 1360]
+  format: png
+
+output:
+  size: [1200, 680]
+  fps: 30
+
+hide: []
+
+login:
+  strategy: none
+
+aliases:
+  graph.canvas: '.gv-graph-canvas'
+  branch.search: '.gv-ref-item__btn[data-rev="feature/search"]'
+  branch.head: '.gv-ref-item__btn--head'
+  commit.merge_checkout: '.gv-unified-row:has-text("Merge branch ''feature/checkout''")'
+  commit.highlight: '.gv-unified-row:has-text("Highlight matched words")'
+  commit.cors: '.gv-unified-row:has-text("Tighten CORS")'
+  files.first: '#files-list .gv-file-row >> nth=0'
+  files.view_toggle: '#btn-file-view'
+  tree.folder_payment: '.gv-tree-folder[data-path$="checkout/payment"]'
+  tree.folder_checkout: '.gv-tree-folder[data-path$="shop/checkout"]'
+  repo.badge: '#repo-path'
+
+ready:
+  graph: '.gv-unified-row'
+  search_view: '.gv-ref-item__btn--selected[data-rev="feature/search"]'
+  head_view: '.gv-ref-item__btn--head.gv-ref-item__btn--selected'
+  files: '#files-list .gv-file-row'
+  tree: '#files-list.gv-detail-files--tree .gv-tree-folder'
+  list: '#files-list:not(.gv-detail-files--tree) .gv-file-row'
+  repo_menu: '#repo-menu:not([hidden]) .gv-repo-menu__item'

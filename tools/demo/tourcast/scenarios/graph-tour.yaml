@@ -1,0 +1,52 @@
+# README GIF 1 — browse history: a merge, a branch's own history, back to HEAD, scroll.
+#   node tools/demo/build.js list
+#   tourcast record tools/demo/tourcast/scenarios/graph-tour.yaml -o out-demo/graph-tour.mp4
+version: 1
+profile: gitline
+seed: 1
+
+cursor:
+  move_duration: 0.8
+  emphasize: true
+
+camera:
+  max_zoom: 1.8
+  close_up: { margin: 120, duration: 0.7 }
+  close_out: { duration: 0.6 }
+  spotlight: { opacity: 0.45, feather: 24, padding: 6, fade: 0.25 }
+
+steps:
+  - goto: /out-demo/index.html?theme=dark
+  - wait_ready: graph
+    hold: 1.2
+
+  - click: commit.merge_checkout
+    caption: Open a merge commit
+    spotlight: true
+  - wait_ready: files
+    hold: 1.8
+
+  - click: branch.search
+    caption: Show one branch's history
+    camera: close_up
+    spotlight: true
+  - wait_ready: search_view
+    hold: 1.2
+  - camera: close_out
+    hold: 1.0
+
+  - click: commit.highlight
+    caption: Branch tip
+  - wait_ready: files
+    hold: 1.4
+
+  - click: branch.head
+    caption: Back to the full log
+  - wait_ready: head_view
+    hold: 0.8
+
+  - scroll: { to: bottom, in: graph.canvas, duration: 2.0, easing: out_quad }
+    caption: Older history loads as you scroll
+    hold: 0.6
+  - scroll: { to: top, in: graph.canvas, duration: 1.0 }
+    hold: 1.0
