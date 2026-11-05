@@ -1,0 +1,125 @@
+# Release on tag push:  git tag v1.3.0 && git push origin v1.3.0
+#
+#   1. the full test matrix (Linux / macOS / Windows) — nothing ships if it fails
+#   2. checks the tag matches package.json "version"
+#   3. packages the VSIX and creates the GitHub release, notes taken from CHANGELOG.md
+#   4. publishes to the VS Code Marketplace and Open VSX — only when the repository
+#      has the matching secret (VSCE_PAT / OVSX_PAT); without it the step is skipped
+#
+# A tag with a hyphen (v1.4.0-rc.1) becomes a GitHub pre-release and is never published
+# to the marketplaces.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  package:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      vsix: ${{ steps.meta.outputs.vsix }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: tag must match package.json version
+        id: meta
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::tag v$tag does not match package.json version $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "vsix=gitline-$version.vsix" >> "$GITHUB_OUTPUT"
+          case "$version" in *-*) echo "prerelease=true" ;; *) echo "prerelease=false" ;; esac >> "$GITHUB_OUTPUT"
+
+      - name: release notes from CHANGELOG.md
+        run: |
+          # The section from "## <version>" up to the next "## " heading, without the heading itself.
+          awk -v v="## ${{ steps.meta.outputs.version }}" '
+            $0 == v { on = 1; next }
+            on && /^## / { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::CHANGELOG.md has no '## ${{ steps.meta.outputs.version }}' section"
+            exit 1
+          fi
+
+      - name: package VSIX
+        run: npx --yes @vscode/vsce@3.2.1 package --out "${{ steps.meta.outputs.vsix }}"
+
+      - name: checksum
+        run: |
+          sum="$(sha256sum "${{ steps.meta.outputs.vsix }}" | cut -d' ' -f1)"
+          printf '\n### Install\nDownload `%s` below → VS Code: **Extensions → ⋯ → Install from VSIX…**\n\nSHA-256 `%s`\n' \
+            "${{ steps.meta.outputs.vsix }}" "$sum" >> notes.md
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          [ "${{ steps.meta.outputs.prerelease }}" = "true" ] && flags="--prerelease"
+          gh release create "$GITHUB_REF_NAME" "${{ steps.meta.outputs.vsix }}" \
+            --title "Gitline ${{ steps.meta.outputs.version }}" --notes-file notes.md --verify-tag $flags
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: ${{ steps.meta.outputs.vsix }}
+
+  publish:
+    needs: package
+    if: needs.package.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # The same file that is attached to the GitHub release goes to both marketplaces.
+      - name: VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        if: env.VSCE_PAT != ''
+        run: npx --yes @vscode/vsce@3.2.1 publish --packagePath "${{ needs.package.outputs.vsix }}"
+
+      - name: Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        if: env.OVSX_PAT != ''
+        run: npx --yes ovsx@0.10.1 publish "${{ needs.package.outputs.vsix }}"
+
+      - name: marketplace secrets missing
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        if: env.VSCE_PAT == '' || env.OVSX_PAT == ''
+        run: echo "::notice::VSCE_PAT and/or OVSX_PAT not set — marketplace publishing skipped. The VSIX is on the GitHub release."
