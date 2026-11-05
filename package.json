@@ -2,7 +2,7 @@
   "name": "gitline",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "publisher": "AzuraLight",
   "author": {
     "name": "AzuraLight"
@@ -29,12 +29,19 @@
     "diff",
     "stash"
   ],
-  "extensionKind": ["ui"],
-  "extensionDependencies": ["vscode.git"],
+  "extensionKind": [
+    "ui"
+  ],
+  "extensionDependencies": [
+    "vscode.git"
+  ],
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["SCM Providers", "Visualization"],
+  "categories": [
+    "SCM Providers",
+    "Visualization"
+  ],
   "galleryBanner": {
     "color": "#3178c6",
     "theme": "dark"
@@ -121,11 +128,19 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "compile:test": "tsc -p tsconfig.test.json",
+    "test:unit": "npm run compile:test && mocha --ui bdd \"out-test/test/unit/**/*.test.js\"",
+    "test:integration": "npm run compile && npm run compile:test && vscode-test",
+    "test": "npm run test:unit && npm run test:integration",
     "package": "npm run compile && npx --yes @vscode/vsce@latest package"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "mocha": "^10.8.2",
     "typescript": "^5.4.0"
   }
 }

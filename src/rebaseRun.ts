@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { promisify } from "util";
-import { runGitCommand } from "./gitExec";
+import { revExists, runGitCommand } from "./gitExec";
 
 const execFileAsync = promisify(execFile);
 
@@ -11,9 +11,23 @@ export type RebaseAction = "pick" | "drop" | "squash" | "fixup";
 export type RebaseTodoItem = { sha: string; subject: string; action: RebaseAction };
 export type RebaseRowPreview = { sha: string; subject: string };
 
-/** Commits between `base` (exclusive) and HEAD, oldest first — same order git uses for rebase-todo. */
-export async function readRebaseCommits(cwd: string, base: string): Promise<RebaseRowPreview[]> {
-  const out = await runGitCommand(cwd, ["log", "--reverse", "--format=%H%x09%s", `${base}..HEAD`]);
+/**
+ * The rebase base the webview asks for is `<picked>^`. When `<picked>` is the root commit that
+ * parent does not exist, so the rebase must use `--root` instead. Returns null for that case.
+ */
+export async function resolveRebaseBase(cwd: string, base: string): Promise<string | null> {
+  if (await revExists(cwd, base)) {
+    return base;
+  }
+  if (base.endsWith("^") && (await revExists(cwd, base.slice(0, -1)))) {
+    return null;
+  }
+  throw new Error(`Unknown revision: ${base}`);
+}
+
+/** Commits between `base` (exclusive) and HEAD, oldest first — same order git uses for rebase-todo. `null` = from the root. */
+export async function readRebaseCommits(cwd: string, base: string | null): Promise<RebaseRowPreview[]> {
+  const out = await runGitCommand(cwd, ["log", "--reverse", "--format=%H%x09%s", base === null ? "HEAD" : `${base}..HEAD`]);
   const rows: RebaseRowPreview[] = [];
   for (const line of out.split(/\r?\n/)) {
     const s = line.trim();
@@ -61,7 +75,7 @@ function quoteForSequenceEditor(p: string): string {
  */
 export async function runInteractiveRebase(
   cwd: string,
-  base: string,
+  base: string | null,
   items: RebaseTodoItem[],
 ): Promise<void> {
   const lines: string[] = [];
@@ -90,7 +104,7 @@ export async function runInteractiveRebase(
   const cleanup = withNoopCommitEditor();
 
   try {
-    await execFileAsync("git", ["rebase", "-i", base], {
+    await execFileAsync("git", ["rebase", "-i", ...(base === null ? ["--root"] : [base])], {
       cwd,
       maxBuffer: 16 * 1024 * 1024,
       encoding: "utf8",

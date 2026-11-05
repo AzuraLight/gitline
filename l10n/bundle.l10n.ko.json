@@ -77,5 +77,8 @@
   "Fetch all remotes": "모든 리모트 페치",
   "Commits ahead / behind upstream": "upstream 대비 앞선/뒤처진 커밋 수",
   "Push {0} to its remote?": "{0}을(를) 해당 리모트에 push 할까요?",
-  "Force-push {0} (with lease)? Overwrites the remote branch.": "{0}을(를) 강제 push(with lease) 할까요? 리모트 브랜치를 덮어씁니다."
+  "Force-push {0} (with lease)? Overwrites the remote branch.": "{0}을(를) 강제 push(with lease) 할까요? 리모트 브랜치를 덮어씁니다.",
+  "Gitline: Pulling…": "Gitline: 가져오는 중…",
+  "Gitline: Pushing…": "Gitline: 올리는 중…",
+  "Gitline: Fetching…": "Gitline: 원격 정보를 받는 중…"
 }

@@ -9,10 +9,10 @@ import {
   readFirstParent,
   readRecentCommits,
   readStashes,
+  readStashFiles,
   readSyncState,
   readWorkingState,
   revExists,
-  runGitCommand,
   type MergesMode,
 } from "./gitExec";
 import {
@@ -22,6 +22,7 @@ import {
   isBranchActionId,
   isCommitActionId,
   isStashActionId,
+  isValidRefName,
   pullCurrent,
   pushCurrent,
   renameBranch,
@@ -38,6 +39,7 @@ import {
   continueRebase,
   isRebaseInProgress,
   readRebaseCommits,
+  resolveRebaseBase,
   runInteractiveRebase,
   skipRebase,
   type RebaseAction,
@@ -49,6 +51,8 @@ let panelViewRef: vscode.WebviewView | undefined;
 let extContext: vscode.ExtensionContext | undefined;
 
 const SELECTED_REPO_KEY = "gitline.selectedRepo";
+/** Upper bound for one graph request — the webview pages up to this in steps as you scroll. */
+const MAX_GRAPH_COMMITS = 5000;
 
 /**
  * The repo the panel should act on: the user's picked repo when it is still
@@ -192,14 +196,26 @@ async function dispatchStashAction(
   await reportAndReload(webview, () => runStashAction(root, action, ref));
 }
 
-type SyncOp = "pull" | "push" | "fetch";
+export type SyncOp = "pull" | "push" | "fetch";
+
+/** Runs pull / push / fetch with a cancellable-looking progress notice — they can take a while on slow remotes. */
+export async function runSyncWithProgress(root: string, op: SyncOp): Promise<void> {
+  const titles: Record<SyncOp, string> = {
+    pull: vscode.l10n.t("Gitline: Pulling…"),
+    push: vscode.l10n.t("Gitline: Pushing…"),
+    fetch: vscode.l10n.t("Gitline: Fetching…"),
+  };
+  const run = op === "pull" ? pullCurrent : op === "push" ? pushCurrent : fetchAll;
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: titles[op] },
+    () => run(root),
+  );
+}
 
 async function dispatchSyncOp(webview: vscode.Webview, op: SyncOp): Promise<void> {
   const root = await getActiveRepoRoot();
   if (!root) return;
-  const run =
-    op === "pull" ? () => pullCurrent(root) : op === "push" ? () => pushCurrent(root) : () => fetchAll(root);
-  await reportAndReload(webview, run);
+  await reportAndReload(webview, () => runSyncWithProgress(root, op));
 }
 
 async function selectRepoAndReload(webview: vscode.Webview, root: string): Promise<void> {
@@ -212,7 +228,7 @@ async function promptCreateBranch(webview: vscode.Webview, refspec: string): Pro
   if (!root) return;
   const name = await vscode.window.showInputBox({
     prompt: vscode.l10n.t("New branch name (at {0})", refspec.slice(0, 7)),
-    validateInput: (v) => (/^[^\s~^:?*\\]+$/.test(v) ? undefined : vscode.l10n.t("Invalid branch name")),
+    validateInput: (v) => (isValidRefName(v) ? undefined : vscode.l10n.t("Invalid branch name")),
   });
   if (!name) return;
   await reportAndReload(webview, () => createBranchFrom(root, name, refspec));
@@ -223,7 +239,7 @@ async function promptCreateTag(webview: vscode.Webview, refspec: string): Promis
   if (!root) return;
   const name = await vscode.window.showInputBox({
     prompt: vscode.l10n.t("Tag name (at {0})", refspec.slice(0, 7)),
-    validateInput: (v) => (/^[^\s~^:?*\\]+$/.test(v) ? undefined : vscode.l10n.t("Invalid tag name")),
+    validateInput: (v) => (isValidRefName(v) ? undefined : vscode.l10n.t("Invalid tag name")),
   });
   if (!name) return;
   await reportAndReload(webview, () => createTagAt(root, name, refspec));
@@ -235,7 +251,7 @@ async function promptRenameBranch(webview: vscode.Webview, branch: string): Prom
   const next = await vscode.window.showInputBox({
     prompt: vscode.l10n.t("Rename {0} to…", branch),
     value: branch,
-    validateInput: (v) => (/^[^\s~^:?*\\]+$/.test(v) ? undefined : vscode.l10n.t("Invalid branch name")),
+    validateInput: (v) => (isValidRefName(v) ? undefined : vscode.l10n.t("Invalid branch name")),
   });
   if (!next || next === branch) return;
   await reportAndReload(webview, () => renameBranch(root, branch, next));
@@ -264,7 +280,7 @@ async function sendGraphPayload(
     return;
   }
   try {
-    const capped = Math.min(500, Math.max(1, limit));
+    const capped = Math.min(MAX_GRAPH_COMMITS, Math.max(1, limit));
     const trimmed = typeof rev === "string" ? rev.trim() : "";
     let logRev = trimmed.length > 0 ? trimmed : undefined;
     // If a rev was selected but no longer resolves (deleted/renamed remote
@@ -317,45 +333,7 @@ async function sendStashFiles(webview: vscode.Webview, ref: string): Promise<voi
   const root = await getActiveRepoRoot();
   if (!root) return;
   try {
-    // git stash show works like git show for the named stash.
-    const [nameStatus, numStat] = await Promise.all([
-      runGitCommand(root, ["stash", "show", "--no-color", "--format=", "--name-status", "-M", ref]),
-      runGitCommand(root, ["stash", "show", "--no-color", "--format=", "--numstat", "-M", ref]),
-    ]);
-    const stats = new Map<string, { ins: number; del: number }>();
-    for (const line of numStat.split(/\r?\n/)) {
-      const s = line.trim();
-      if (!s) continue;
-      const cols = s.split("\t");
-      if (cols.length < 3) continue;
-      const ins = cols[0] === "-" ? 0 : Number(cols[0]) || 0;
-      const del = cols[1] === "-" ? 0 : Number(cols[1]) || 0;
-      stats.set(cols[cols.length - 1], { ins, del });
-    }
-    const files: Array<{
-      status: string;
-      path: string;
-      oldPath?: string;
-      insertions: number;
-      deletions: number;
-    }> = [];
-    for (const line of nameStatus.split(/\r?\n/)) {
-      const s = line.trim();
-      if (!s) continue;
-      const cols = s.split("\t");
-      const status = cols[0]?.[0] ?? "";
-      if (!status) continue;
-      if ((status === "R" || status === "C") && cols.length >= 3) {
-        const oldPath = cols[1];
-        const p = cols[2];
-        const st = stats.get(p) ?? { ins: 0, del: 0 };
-        files.push({ status, path: p, oldPath, insertions: st.ins, deletions: st.del });
-      } else if (cols.length >= 2) {
-        const p = cols[1];
-        const st = stats.get(p) ?? { ins: 0, del: 0 };
-        files.push({ status, path: p, insertions: st.ins, deletions: st.del });
-      }
-    }
+    const files = await readStashFiles(root, ref);
     webview.postMessage({ type: "stashFiles", ref, files });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -391,7 +369,7 @@ async function sendRebaseCommits(webview: vscode.Webview, base: string): Promise
       });
       return;
     }
-    const commits = await readRebaseCommits(root, base);
+    const commits = await readRebaseCommits(root, await resolveRebaseBase(root, base));
     webview.postMessage({ type: "rebaseCommits", base, commits });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -424,7 +402,7 @@ async function applyRebase(
   );
   if (!yes) return;
   try {
-    await runInteractiveRebase(root, base, items);
+    await runInteractiveRebase(root, await resolveRebaseBase(root, base), items);
     webview.postMessage({ type: "rebaseDone" });
     webview.postMessage({ type: "reloadNow" });
   } catch (e: unknown) {

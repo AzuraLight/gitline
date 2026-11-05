@@ -1,4 +1,4 @@
-import { runGitCommand } from "./gitExec";
+import { runGitCommand, runGitNetworkCommand } from "./gitExec";
 
 export const COMMIT_ACTION_IDS = [
   "checkout-detached",
@@ -39,7 +39,8 @@ export function isStashActionId(v: string): v is StashActionId {
 }
 
 const HASH_OK = /^[0-9a-f]{7,40}$/i;
-const REF_OK = /^[^\s~^:?*\\]+$/;
+/** Ref names git accepts — and never starting with "-", which git would read as an option. */
+const REF_OK = /^(?!-)[^\s~^:?*\\]+$/;
 const STASH_OK = /^stash@\{\d+\}$/;
 
 export function assertCommitHash(hash: string): string {
@@ -50,9 +51,14 @@ export function assertCommitHash(hash: string): string {
   return t;
 }
 
+export function isValidRefName(name: string): boolean {
+  const t = name.trim();
+  return t.length > 0 && REF_OK.test(t);
+}
+
 export function assertRefName(name: string): string {
   const t = name.trim();
-  if (!t || !REF_OK.test(t)) {
+  if (!isValidRefName(t)) {
     throw new Error("Invalid ref name");
   }
   return t;
@@ -115,9 +121,9 @@ export async function runBranchAction(cwd: string, action: BranchActionId, branc
       if (slash > 0) {
         const remote = name.slice(0, slash);
         const local = name.slice(slash + 1);
-        await runGitCommand(cwd, ["fetch", remote, local]);
+        await runGitNetworkCommand(cwd, ["fetch", remote, local]);
       } else {
-        await runGitCommand(cwd, ["fetch"]);
+        await runGitNetworkCommand(cwd, ["fetch"]);
       }
       return;
     }
@@ -126,16 +132,16 @@ export async function runBranchAction(cwd: string, action: BranchActionId, branc
       // otherwise publish it against origin and set tracking (`-u`).
       const remote = await branchUpstreamRemote(cwd, name);
       if (remote) {
-        await runGitCommand(cwd, ["push", remote, name]);
+        await runGitNetworkCommand(cwd, ["push", remote, name]);
       } else {
-        await runGitCommand(cwd, ["push", "-u", "origin", name]);
+        await runGitNetworkCommand(cwd, ["push", "-u", "origin", name]);
       }
       return;
     }
     case "branch-push-force": {
       // Safe force for a rebased/amended branch: refuses if the remote moved.
       const remote = (await branchUpstreamRemote(cwd, name)) ?? "origin";
-      await runGitCommand(cwd, ["push", "--force-with-lease", remote, name]);
+      await runGitNetworkCommand(cwd, ["push", "--force-with-lease", remote, name]);
       return;
     }
     case "branch-merge-into-current":
@@ -156,7 +162,7 @@ export async function runBranchAction(cwd: string, action: BranchActionId, branc
       if (slash <= 0) throw new Error("Expected remote/branch");
       const remote = name.slice(0, slash);
       const remoteBranch = name.slice(slash + 1);
-      await runGitCommand(cwd, ["push", remote, "--delete", remoteBranch]);
+      await runGitNetworkCommand(cwd, ["push", remote, "--delete", remoteBranch]);
       return;
     }
   }
@@ -209,12 +215,12 @@ async function branchUpstreamRemote(cwd: string, name: string): Promise<string |
 
 /** Fast-forward pull of the current branch. Surfaces conflicts/divergence as errors. */
 export async function pullCurrent(cwd: string): Promise<void> {
-  await runGitCommand(cwd, ["pull", "--ff-only"]);
+  await runGitNetworkCommand(cwd, ["pull", "--ff-only"]);
 }
 
 /** Fetch every remote and prune deleted remote-tracking refs. */
 export async function fetchAll(cwd: string): Promise<void> {
-  await runGitCommand(cwd, ["fetch", "--all", "--prune"]);
+  await runGitNetworkCommand(cwd, ["fetch", "--all", "--prune"]);
 }
 
 /** Push the current branch to its upstream, publishing to origin if unset. */

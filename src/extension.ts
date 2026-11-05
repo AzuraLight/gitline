@@ -2,12 +2,13 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { registerCommitShowProvider } from "./commitShowProvider";
 import { resolveRepoRootForFile } from "./gitExec";
-import { fetchAll, pullCurrent, pushCurrent } from "./gitPanelActions";
 import {
   getActiveRepoRoot,
   registerGitlinePanelWebview,
   revealCommitPanelAndReload,
   revealCommitPanelWithPath,
+  runSyncWithProgress,
+  type SyncOp,
 } from "./panelWebview";
 
 function toRepoRelativePath(repoRoot: string, filePath: string): string {
@@ -56,16 +57,14 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   );
 
-  const runSyncCommand = (op: "pull" | "push" | "fetch") => async (): Promise<void> => {
+  const runSyncCommand = (op: SyncOp) => async (): Promise<void> => {
     const root = await getActiveRepoRoot();
     if (!root) {
       void vscode.window.showWarningMessage(vscode.l10n.t("Gitline: Could not find a Git repository."));
       return;
     }
     try {
-      if (op === "pull") await pullCurrent(root);
-      else if (op === "push") await pushCurrent(root);
-      else await fetchAll(root);
+      await runSyncWithProgress(root, op);
       await revealCommitPanelAndReload();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

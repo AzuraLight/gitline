@@ -1,0 +1,42 @@
+name: test
+
+on:
+  push:
+    branches: [main, "release/**"]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: git identity for test repositories
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "ci"
+
+      - run: npm ci
+
+      - name: type check and build
+        run: npm run compile
+
+      - name: unit tests
+        run: npm run test:unit
+
+      - name: integration tests (Linux, virtual display)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration
+
+      - name: integration tests
+        if: runner.os != 'Linux'
+        run: npm run test:integration

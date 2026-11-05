@@ -13,21 +13,32 @@ import type {
 
 const execFileAsync = promisify(execFile);
 
-/** Runs `git` with explicit argv (no shell). cwd must be the repository root. */
-export async function runGitCommand(cwd: string, args: string[]): Promise<string> {
-  return execGit(cwd, args, 10 * 1024 * 1024);
-}
+/** Network operations (pull/push/fetch) give up after this long instead of hanging the panel. */
+export const NETWORK_TIMEOUT_MS = 120_000;
 
-async function execGit(cwd: string, args: string[], maxBuffer: number): Promise<string> {
+type ExecOptions = { maxBuffer?: number; timeoutMs?: number };
+
+/**
+ * Every git invocation goes through here, with explicit argv (no shell).
+ * - `core.quotePath=false` keeps non-ASCII paths (한글, 中文, …) as real UTF-8 instead of `"\355…"` escapes.
+ * - `GIT_TERMINAL_PROMPT=0` makes git fail fast when it would otherwise wait on a credential prompt
+ *   that has no terminal to appear in. Credential helpers (GCM, keychain, ssh-agent) still work.
+ */
+async function execGit(cwd: string, args: string[], options: ExecOptions = {}): Promise<string> {
   try {
-    const { stdout } = await execFileAsync("git", args, {
+    const { stdout } = await execFileAsync("git", ["-c", "core.quotePath=false", ...args], {
       cwd,
-      maxBuffer,
+      maxBuffer: options.maxBuffer ?? 10 * 1024 * 1024,
+      timeout: options.timeoutMs ?? 0,
       encoding: "utf8",
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
     });
     return typeof stdout === "string" ? stdout : String(stdout);
   } catch (err: unknown) {
-    const e = err as NodeJS.ErrnoException & { stderr?: Buffer | string };
+    const e = err as NodeJS.ErrnoException & { stderr?: Buffer | string; killed?: boolean; signal?: string };
+    if (e?.killed && options.timeoutMs) {
+      throw new Error(`git ${args[0]} timed out after ${Math.round(options.timeoutMs / 1000)}s`);
+    }
     const parts: string[] = [];
     if (e?.message) {
       parts.push(e.message);
@@ -42,6 +53,25 @@ async function execGit(cwd: string, args: string[], maxBuffer: number): Promise<
   }
 }
 
+/** Runs `git` for local operations. cwd must be the repository root. */
+export async function runGitCommand(cwd: string, args: string[]): Promise<string> {
+  return execGit(cwd, args);
+}
+
+/** Runs `git` for operations that talk to a remote — bounded by {@link NETWORK_TIMEOUT_MS}. */
+export async function runGitNetworkCommand(cwd: string, args: string[]): Promise<string> {
+  return execGit(cwd, args, { timeoutMs: NETWORK_TIMEOUT_MS });
+}
+
+/** Runs `git` and resolves to null instead of throwing — for probes where failure is an answer. */
+async function tryGit(cwd: string, args: string[]): Promise<string | null> {
+  try {
+    return await execGit(cwd, args, { maxBuffer: 4 * 1024 * 1024 });
+  } catch {
+    return null;
+  }
+}
+
 function splitRecord(block: string): string[] {
   return block.split("\x1e");
 }
@@ -52,30 +82,19 @@ function splitRecord(block: string): string[] {
  * (deleted/renamed remote branch, or a typo) instead of failing the whole view.
  */
 export async function revExists(cwd: string, rev: string): Promise<boolean> {
-  try {
-    await execFileAsync("git", ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`], {
-      cwd,
-      maxBuffer: 1024 * 1024,
-      encoding: "utf8",
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  return (await tryGit(cwd, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`])) !== null;
+}
+
+/** Full hash of the commit `rev` points to, or null when it does not resolve. */
+export async function resolveCommit(cwd: string, rev: string): Promise<string | null> {
+  const out = await tryGit(cwd, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`]);
+  const hash = out?.trim() ?? "";
+  return hash.length > 0 ? hash : null;
 }
 
 export async function getRepoRoot(cwd: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync("git", ["rev-parse", "--show-toplevel"], {
-      cwd,
-      maxBuffer: 10 * 1024 * 1024,
-      encoding: "utf8",
-    });
-    const root = (typeof stdout === "string" ? stdout : String(stdout)).trim();
-    return root.length > 0 ? root : null;
-  } catch {
-    return null;
-  }
+  const root = (await tryGit(cwd, ["rev-parse", "--show-toplevel"]))?.trim() ?? "";
+  return root.length > 0 ? root : null;
 }
 
 /** Walks parent directories from a file path until a Git root is found. */
@@ -97,17 +116,7 @@ export async function resolveRepoRootForFile(fileFsPath: string): Promise<string
 
 /** Current branch (or empty if detached / error). */
 export async function readCurrentBranchName(cwd: string): Promise<string> {
-  try {
-    const { stdout } = await execFileAsync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
-      cwd,
-      maxBuffer: 1024 * 1024,
-      encoding: "utf8",
-    });
-    const b = (typeof stdout === "string" ? stdout : String(stdout)).trim();
-    return b.length > 0 ? b : "";
-  } catch {
-    return "";
-  }
+  return (await tryGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() ?? "";
 }
 
 /**
@@ -115,80 +124,44 @@ export async function readCurrentBranchName(cwd: string): Promise<string> {
  * the branch has no upstream (or HEAD is detached); ahead/behind default to 0.
  */
 export async function readSyncState(cwd: string): Promise<GitSyncState> {
-  let upstream: string | null = null;
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
-      { cwd, maxBuffer: 1024 * 1024, encoding: "utf8" },
-    );
-    const u = (typeof stdout === "string" ? stdout : String(stdout)).trim();
-    upstream = u.length > 0 ? u : null;
-  } catch {
+  const u = (await tryGit(cwd, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]))?.trim();
+  if (!u) {
     return { upstream: null, ahead: 0, behind: 0 };
   }
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
-      { cwd, maxBuffer: 1024 * 1024, encoding: "utf8" },
-    );
-    const parts = (typeof stdout === "string" ? stdout : String(stdout)).trim().split(/\s+/);
-    const ahead = Number(parts[0]) || 0;
-    const behind = Number(parts[1]) || 0;
-    return { upstream, ahead, behind };
-  } catch {
-    return { upstream, ahead: 0, behind: 0 };
+  const counts = await tryGit(cwd, ["rev-list", "--left-right", "--count", "HEAD...@{upstream}"]);
+  if (counts === null) {
+    return { upstream: u, ahead: 0, behind: 0 };
   }
+  const parts = counts.trim().split(/\s+/);
+  return { upstream: u, ahead: Number(parts[0]) || 0, behind: Number(parts[1]) || 0 };
+}
+
+function refNames(out: string | null): string[] {
+  return (out ?? "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
 }
 
 /** Local + remote branch names for a SourceTree-style sidebar. */
 export async function readBranchTreePayload(cwd: string): Promise<GitBranchTreePayload> {
-  const current = await readCurrentBranchName(cwd);
-  const locals: string[] = [];
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["for-each-ref", "--sort=refname", "--format=%(refname:short)", "refs/heads/"],
-      { cwd, maxBuffer: 4 * 1024 * 1024, encoding: "utf8" },
-    );
-    for (const line of (typeof stdout === "string" ? stdout : String(stdout)).split(/\r?\n/)) {
-      const s = line.trim();
-      if (s && s !== "HEAD") {
-        locals.push(s);
-      }
-    }
-  } catch {
-    /* ignore */
-  }
+  const [current, localOut, remoteOut] = await Promise.all([
+    readCurrentBranchName(cwd),
+    tryGit(cwd, ["for-each-ref", "--sort=refname", "--format=%(refname:short)", "refs/heads/"]),
+    tryGit(cwd, ["for-each-ref", "--sort=refname", "--format=%(refname:short)", "refs/remotes/"]),
+  ]);
+  const locals = refNames(localOut).filter((s) => s !== "HEAD");
   const remoteMap = new Map<string, Set<string>>();
-  try {
-    const { stdout } = await execFileAsync(
-      "git",
-      ["for-each-ref", "--sort=refname", "--format=%(refname:short)", "refs/remotes/"],
-      { cwd, maxBuffer: 4 * 1024 * 1024, encoding: "utf8" },
-    );
-    for (const line of (typeof stdout === "string" ? stdout : String(stdout)).split(/\r?\n/)) {
-      const s = line.trim();
-      if (!s) {
-        continue;
-      }
-      const i = s.indexOf("/");
-      if (i <= 0) {
-        continue;
-      }
-      const remote = s.slice(0, i);
-      const branch = s.slice(i + 1);
-      if (branch === "HEAD") {
-        continue;
-      }
-      if (!remoteMap.has(remote)) {
-        remoteMap.set(remote, new Set());
-      }
-      remoteMap.get(remote)!.add(s);
+  for (const s of refNames(remoteOut)) {
+    const i = s.indexOf("/");
+    if (i <= 0) {
+      continue;
     }
-  } catch {
-    /* ignore */
+    const remote = s.slice(0, i);
+    if (s.slice(i + 1) === "HEAD") {
+      continue;
+    }
+    if (!remoteMap.has(remote)) {
+      remoteMap.set(remote, new Set());
+    }
+    remoteMap.get(remote)!.add(s);
   }
   const remotes = [...remoteMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -197,6 +170,7 @@ export async function readBranchTreePayload(cwd: string): Promise<GitBranchTreeP
 }
 
 const COMMIT_RECORD_SEP = "\x1f";
+const COMMIT_FORMAT = ["%H", "%P", "%s", "%an", "%ct", "%D"].join("%x1e") + "%x1f";
 
 function parseDecorate(decorate: string): GitCommitRef[] {
   const out: GitCommitRef[] = [];
@@ -232,52 +206,7 @@ function parseDecorate(decorate: string): GitCommitRef[] {
   return out;
 }
 
-export type MergesMode = "all" | "hide" | "only";
-
-export async function readRecentCommits(
-  cwd: string,
-  limit: number,
-  rev?: string,
-  pathFilter?: string,
-  query?: string,
-  mergesMode?: MergesMode,
-): Promise<GitCommitRow[]> {
-  const format = ["%H", "%P", "%s", "%an", "%ct", "%D"].join("%x1e") + "%x1f";
-  const target = rev?.trim();
-  const logArgs = ["log"];
-  if (target && target.length > 0) {
-    logArgs.push(target);
-  }
-  logArgs.push(`--max-count=${limit}`, `--pretty=format:${format}`, "--topo-order");
-  if (mergesMode === "hide") {
-    logArgs.push("--no-merges");
-  } else if (mergesMode === "only") {
-    logArgs.push("--merges");
-  }
-
-  const q = query?.trim();
-  if (q && q.length > 0) {
-    // @author syntax → author filter
-    if (q.startsWith("@") && q.length > 1) {
-      logArgs.push(`--author=${q.slice(1)}`, "--regexp-ignore-case");
-    } else if (/^[0-9a-f]{4,40}$/i.test(q)) {
-      // SHA prefix: --grep on hash via --regexp-ignore-case + --all so it scans full history; cheap enough.
-      logArgs.push(`--grep=${q}`, "--regexp-ignore-case");
-    } else {
-      logArgs.push(`--grep=${q}`, "--regexp-ignore-case");
-    }
-  }
-
-  const pf = pathFilter?.trim();
-  if (pf && pf.length > 0) {
-    logArgs.push("--follow", "--", pf);
-  }
-  const { stdout } = await execFileAsync("git", logArgs, {
-    cwd,
-    maxBuffer: 10 * 1024 * 1024,
-    encoding: "utf8",
-  });
-  const out = typeof stdout === "string" ? stdout : String(stdout);
+function parseCommitRows(out: string): GitCommitRow[] {
   const rows: GitCommitRow[] = [];
   for (const raw of out.split(COMMIT_RECORD_SEP)) {
     const chunk = raw.trim();
@@ -300,9 +229,68 @@ export async function readRecentCommits(
   return rows;
 }
 
+export type MergesMode = "all" | "hide" | "only";
+
+/** A search that looks like a commit hash (4–40 hex characters). */
+export function looksLikeHash(query: string): boolean {
+  return /^[0-9a-f]{4,40}$/i.test(query);
+}
+
+export async function readRecentCommits(
+  cwd: string,
+  limit: number,
+  rev?: string,
+  pathFilter?: string,
+  query?: string,
+  mergesMode?: MergesMode,
+): Promise<GitCommitRow[]> {
+  const target = rev?.trim();
+  const logArgs = ["log"];
+  if (target && target.length > 0) {
+    logArgs.push(target);
+  }
+  logArgs.push(`--max-count=${limit}`, `--pretty=format:${COMMIT_FORMAT}`, "--topo-order");
+  if (mergesMode === "hide") {
+    logArgs.push("--no-merges");
+  } else if (mergesMode === "only") {
+    logArgs.push("--merges");
+  }
+
+  const q = query?.trim();
+  if (q && q.length > 0) {
+    if (q.startsWith("@") && q.length > 1) {
+      // @author syntax → author filter
+      logArgs.push(`--author=${q.slice(1)}`, "--regexp-ignore-case");
+    } else {
+      logArgs.push(`--grep=${q}`, "--regexp-ignore-case");
+    }
+  }
+
+  const pf = pathFilter?.trim();
+  if (pf && pf.length > 0) {
+    logArgs.push("--follow", "--", pf);
+  }
+  const rows = parseCommitRows(await execGit(cwd, logArgs));
+
+  // A hex query may be a commit hash — `--grep` only searches messages, so look the hash up
+  // directly and put that commit first (deduplicated if its message also matched).
+  if (q && looksLikeHash(q)) {
+    const hash = await resolveCommit(cwd, q);
+    if (hash && !rows.some((r) => r.hash === hash)) {
+      const hit = parseCommitRows(
+        await execGit(cwd, ["log", "--max-count=1", `--pretty=format:${COMMIT_FORMAT}`, hash]),
+      );
+      rows.unshift(...hit);
+    }
+  }
+  return rows;
+}
+
 /** Counts of working tree changes by category. */
 export async function readWorkingState(cwd: string): Promise<GitWorkingState> {
-  const out = await execGit(cwd, ["status", "--porcelain=v1", "--untracked-files=normal"], 8 * 1024 * 1024);
+  const out = await execGit(cwd, ["status", "--porcelain=v1", "--untracked-files=normal"], {
+    maxBuffer: 8 * 1024 * 1024,
+  });
   let staged = 0;
   let modified = 0;
   let untracked = 0;
@@ -328,10 +316,8 @@ export async function readWorkingState(cwd: string): Promise<GitWorkingState> {
 /** All stashes via `git stash list`. */
 export async function readStashes(cwd: string): Promise<GitStashEntry[]> {
   const fmt = ["%gd", "%h", "%ct", "%s"].join("%x1e") + "%x1f";
-  let out = "";
-  try {
-    out = await execGit(cwd, ["stash", "list", `--format=${fmt}`], 4 * 1024 * 1024);
-  } catch {
+  const out = await tryGit(cwd, ["stash", "list", `--format=${fmt}`]);
+  if (out === null) {
     return [];
   }
   const list: GitStashEntry[] = [];
@@ -350,51 +336,80 @@ export async function readStashes(cwd: string): Promise<GitStashEntry[]> {
   return list;
 }
 
-/** Files touched by a commit, with rename detection and line stats. */
-export async function readCommitFiles(cwd: string, sha: string): Promise<GitCommitFile[]> {
-  // name-status gives status letters + rename info; numstat gives insertions/deletions.
-  // We run both and join on the target path.
-  const [nameStatus, numStat] = await Promise.all([
-    execGit(cwd, ["show", "--no-color", "--format=", "--name-status", "-M", sha], 8 * 1024 * 1024),
-    execGit(cwd, ["show", "--no-color", "--format=", "--numstat", "-M", sha], 8 * 1024 * 1024),
-  ]);
+/**
+ * Joins `--name-status -z` and `--numstat -z` output into file changes.
+ *
+ * NUL-separated output is the only form git guarantees to be unambiguous: paths are raw bytes
+ * (no quoting of non-ASCII, tabs or newlines) and renames list old and new path separately
+ * instead of the `{old => new}` shorthand that line-based numstat uses.
+ */
+export function parseChangedFiles(nameStatusZ: string, numstatZ: string): GitCommitFile[] {
   const stats = new Map<string, { ins: number; del: number }>();
-  for (const line of numStat.split(/\r?\n/)) {
-    const s = line.trim();
-    if (!s) continue;
-    const cols = s.split("\t");
+  const numTokens = numstatZ.split("\0");
+  for (let i = 0; i < numTokens.length; i++) {
+    const token = numTokens[i].replace(/^\n+/, "");
+    const cols = token.split("\t");
     if (cols.length < 3) continue;
     const ins = cols[0] === "-" ? 0 : Number(cols[0]) || 0;
     const del = cols[1] === "-" ? 0 : Number(cols[1]) || 0;
-    // For renames, numstat path is `old => new` or `{old => new}`; use the final path heuristically.
-    const path = cols[cols.length - 1];
-    stats.set(path, { ins, del });
+    let target = cols.slice(2).join("\t");
+    if (target === "") {
+      // Rename/copy: "<ins>\t<del>\t\0<old>\0<new>\0"
+      target = numTokens[i + 2] ?? "";
+      i += 2;
+    }
+    stats.set(target, { ins, del });
   }
+
   const files: GitCommitFile[] = [];
-  for (const line of nameStatus.split(/\r?\n/)) {
-    const s = line.trim();
-    if (!s) continue;
-    const cols = s.split("\t");
-    const status = cols[0]?.[0] ?? "";
-    if (!status) continue;
-    if ((status === "R" || status === "C") && cols.length >= 3) {
-      const oldPath = cols[1];
-      const path = cols[2];
-      const stat = stats.get(path) ?? { ins: 0, del: 0 };
-      files.push({ status, path, oldPath, insertions: stat.ins, deletions: stat.del });
-    } else if (cols.length >= 2) {
-      const path = cols[1];
-      const stat = stats.get(path) ?? { ins: 0, del: 0 };
-      files.push({ status, path, insertions: stat.ins, deletions: stat.del });
+  const nameTokens = nameStatusZ.split("\0");
+  for (let i = 0; i < nameTokens.length; i++) {
+    const statusToken = nameTokens[i].replace(/^\n+/, "");
+    const status = statusToken.charAt(0);
+    if (!status || !/^[A-Z]$/.test(status)) continue;
+    if (status === "R" || status === "C") {
+      const oldPath = nameTokens[i + 1] ?? "";
+      const filePath = nameTokens[i + 2] ?? "";
+      i += 2;
+      const stat = stats.get(filePath) ?? { ins: 0, del: 0 };
+      files.push({ status, path: filePath, oldPath, insertions: stat.ins, deletions: stat.del });
+    } else {
+      const filePath = nameTokens[i + 1] ?? "";
+      i += 1;
+      const stat = stats.get(filePath) ?? { ins: 0, del: 0 };
+      files.push({ status, path: filePath, insertions: stat.ins, deletions: stat.del });
     }
   }
   return files;
 }
 
+/** `subcommand` is the git command and its fixed options; `targets` are the revisions after the diff options. */
+async function readChangedFiles(cwd: string, subcommand: string[], targets: string[]): Promise<GitCommitFile[]> {
+  const run = (mode: string) =>
+    execGit(cwd, [...subcommand, "--no-color", "-z", mode, "-M", ...targets], { maxBuffer: 8 * 1024 * 1024 });
+  const [nameStatus, numStat] = await Promise.all([run("--name-status"), run("--numstat")]);
+  return parseChangedFiles(nameStatus, numStat);
+}
+
+/** Files touched by a commit, with rename detection and line stats. */
+export async function readCommitFiles(cwd: string, sha: string): Promise<GitCommitFile[]> {
+  return readChangedFiles(cwd, ["show", "--format="], [sha]);
+}
+
+/** Files changed between two arbitrary commits (`git diff -M a b`). */
+export async function readCompareFiles(cwd: string, a: string, b: string): Promise<GitCommitFile[]> {
+  return readChangedFiles(cwd, ["diff"], [a, b]);
+}
+
+/** Files in a stash entry (`git stash show`). */
+export async function readStashFiles(cwd: string, ref: string): Promise<GitCommitFile[]> {
+  return readChangedFiles(cwd, ["stash", "show", "--format="], [ref]);
+}
+
 /** Content of `<path>` at commit `<sha>`. Returns empty string if missing. */
 export async function readBlobAt(cwd: string, sha: string, repoPath: string): Promise<string> {
   try {
-    return await execGit(cwd, ["show", `${sha}:${repoPath}`], 16 * 1024 * 1024);
+    return await execGit(cwd, ["show", `${sha}:${repoPath}`], { maxBuffer: 16 * 1024 * 1024 });
   } catch {
     return "";
   }
@@ -402,64 +417,18 @@ export async function readBlobAt(cwd: string, sha: string, repoPath: string): Pr
 
 /** First parent sha of `<sha>`, or empty string for root commits. */
 export async function readFirstParent(cwd: string, sha: string): Promise<string> {
-  try {
-    const out = await execGit(cwd, ["rev-parse", `${sha}^`], 1024 * 1024);
-    return out.trim();
-  } catch {
-    return "";
-  }
+  return (await tryGit(cwd, ["rev-parse", "--verify", "--quiet", `${sha}^`]))?.trim() ?? "";
 }
 
 export async function readCommitShow(repoRoot: string, sha: string): Promise<string> {
-  return execGit(
-    repoRoot,
-    ["show", "--no-color", "--stat", "--patch", "--pretty=fuller", sha],
-    16 * 1024 * 1024,
-  );
-}
-
-/** Files changed between two arbitrary commits (`git diff -M a b`). */
-export async function readCompareFiles(cwd: string, a: string, b: string): Promise<GitCommitFile[]> {
-  const [nameStatus, numStat] = await Promise.all([
-    execGit(cwd, ["diff", "--no-color", "--name-status", "-M", a, b], 8 * 1024 * 1024),
-    execGit(cwd, ["diff", "--no-color", "--numstat", "-M", a, b], 8 * 1024 * 1024),
-  ]);
-  const stats = new Map<string, { ins: number; del: number }>();
-  for (const line of numStat.split(/\r?\n/)) {
-    const s = line.trim();
-    if (!s) continue;
-    const cols = s.split("\t");
-    if (cols.length < 3) continue;
-    const ins = cols[0] === "-" ? 0 : Number(cols[0]) || 0;
-    const del = cols[1] === "-" ? 0 : Number(cols[1]) || 0;
-    stats.set(cols[cols.length - 1], { ins, del });
-  }
-  const files: GitCommitFile[] = [];
-  for (const line of nameStatus.split(/\r?\n/)) {
-    const s = line.trim();
-    if (!s) continue;
-    const cols = s.split("\t");
-    const status = cols[0]?.[0] ?? "";
-    if (!status) continue;
-    if ((status === "R" || status === "C") && cols.length >= 3) {
-      const oldPath = cols[1];
-      const p = cols[2];
-      const stat = stats.get(p) ?? { ins: 0, del: 0 };
-      files.push({ status, path: p, oldPath, insertions: stat.ins, deletions: stat.del });
-    } else if (cols.length >= 2) {
-      const p = cols[1];
-      const stat = stats.get(p) ?? { ins: 0, del: 0 };
-      files.push({ status, path: p, insertions: stat.ins, deletions: stat.del });
-    }
-  }
-  return files;
+  return execGit(repoRoot, ["show", "--no-color", "--stat", "--patch", "--pretty=fuller", sha], {
+    maxBuffer: 16 * 1024 * 1024,
+  });
 }
 
 /** Combined diff for the Compare patch tab (`git diff --stat -p a b`). */
 export async function readCompareShow(repoRoot: string, a: string, b: string): Promise<string> {
-  return execGit(
-    repoRoot,
-    ["diff", "--no-color", "--stat", "--patch", "-M", a, b],
-    16 * 1024 * 1024,
-  );
+  return execGit(repoRoot, ["diff", "--no-color", "--stat", "--patch", "-M", a, b], {
+    maxBuffer: 16 * 1024 * 1024,
+  });
 }

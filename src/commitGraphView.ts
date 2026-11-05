@@ -190,7 +190,11 @@ function getPanelClientScript(): string {
   var selectedRepo = "";
 
   var state = vscode.getState() || {};
-  var limit = 200;
+  // Paging: the graph asks for PAGE commits, then PAGE more each time the list is scrolled near its end.
+  var PAGE = 200;
+  var limit = PAGE;
+  var hasMore = false;
+  var loadingMore = false;
   var selectedRev = typeof state.selectedRev === "string" ? state.selectedRev : "";
   var pathFilter = typeof state.pathFilter === "string" ? state.pathFilter : "";
   var query = typeof state.query === "string" ? state.query : "";
@@ -759,7 +763,9 @@ function getPanelClientScript(): string {
     });
   }
 
-  function requestGraph() {
+  // keepLimit: true for auto-refresh and paging (keep what is loaded); a new search/filter starts from PAGE again.
+  function requestGraph(keepLimit) {
+    if (!keepLimit) limit = PAGE;
     var msg = { type: "requestGraph", limit: limit };
     if (selectedRev) msg.rev = selectedRev;
     if (pathFilter) msg.pathFilter = pathFilter;
@@ -844,7 +850,7 @@ function getPanelClientScript(): string {
     var d = ev.data;
     if (!d || typeof d !== "object") return;
     if (d.type === "reloadNow") {
-      requestGraph();
+      requestGraph(true);
       return;
     }
     if (d.type === "commitFiles") {
@@ -1050,6 +1056,8 @@ function getPanelClientScript(): string {
     }
 
     var commits = payload.commits || [];
+    hasMore = commits.length >= limit;
+    loadingMore = false;
     if (!commits.length) {
       root.innerHTML = "";
       showEmptyCard(UI.emptyNoCommitsTitle || "", UI.emptyNoCommitsBody || "");
@@ -1402,6 +1410,12 @@ function getPanelClientScript(): string {
         if (node.nextSibling !== anchor) commitList.insertBefore(node, anchor);
         anchor = node;
       }
+      // Near the end of what is loaded → ask for the next page.
+      if (hasMore && !loadingMore && visEnd >= commits.length - 1 - BUFFER) {
+        loadingMore = true;
+        limit += PAGE;
+        requestGraph(true);
+      }
     }
 
     var rafScheduled = false;
@@ -1416,6 +1430,16 @@ function getPanelClientScript(): string {
     scrollHandlerRef.fn = onScroll;
     if (canvas) canvas.addEventListener("scroll", onScroll, { passive: true });
     updateVisible();
+
+    // A re-render (auto-refresh, next page) keeps the commit the user was looking at open.
+    if (currentHash) {
+      for (var si = 0; si < commits.length; si++) {
+        if (commits[si].hash === currentHash) {
+          showDetail(commits[si]);
+          break;
+        }
+      }
+    }
   }
 
   function renderVirtualRow(opts) {

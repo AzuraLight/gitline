@@ -72,5 +72,8 @@
   "Push {0} to its remote?": "Push {0} to its remote?",
   "Force-push {0} (with lease)? Overwrites the remote branch.": "Force-push {0} (with lease)? Overwrites the remote branch.",
   "{0} ({1})": "{0} ({1})",
-  "{0} → {1} ({2})": "{0} → {1} ({2})"
+  "{0} → {1} ({2})": "{0} → {1} ({2})",
+  "Gitline: Pulling…": "Gitline: Pulling…",
+  "Gitline: Pushing…": "Gitline: Pushing…",
+  "Gitline: Fetching…": "Gitline: Fetching…"
 }

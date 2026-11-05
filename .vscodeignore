@@ -5,3 +5,9 @@ src/**
 **/tsconfig.json
 **/*.map
 node_modules/**
+out-test/**
+test/**
+.vscode-test/**
+.vscode-test.mjs
+tsconfig.test.json
+.github/**

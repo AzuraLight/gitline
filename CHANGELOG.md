@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.2.1
+
+### Fixed
+
+- **Non-ASCII file names** (한글, 中文, 日本語 …) were shown as escaped octal
+  (`"\355\225…"`) and their diffs opened empty. Git output is now read in
+  NUL-separated form with `core.quotePath=false`, so every file name works.
+- **Only the latest 200 commits were ever shown.** The graph now loads older
+  history in pages of 200 as you scroll (up to 5,000 per view).
+- **Searching by SHA found nothing** — hex queries were only matched against
+  commit messages. A full or partial hash now lists that commit first.
+- **Renamed files showed `+0 −0`.** Line counts for renames and copies are now
+  correct.
+- **The commit details pane closed on every refresh** (saving a file updates
+  `.git/index`, which reloads the graph). The selected commit now stays open.
+- **Interactive rebase from the root commit** failed with an unknown revision;
+  it now uses `--root`.
+
+### Changed
+
+- Pull, push and fetch show a progress notification, stop after 2 minutes, and
+  fail fast instead of waiting on a credential prompt that has no terminal.
+- Branch and tag names starting with `-` are rejected (git would read them as
+  options).
+
+### Internal
+
+- Added unit tests (Mocha) and integration tests (`@vscode/test-cli`), run on
+  Linux, macOS and Windows in GitHub Actions.
+- The three copies of the changed-files parser (commit, compare, stash) are now
+  one function; ref-name validation is shared between the actions and the input
+  boxes.
+
 ## 1.2.0
 
 ### Added

@@ -19,15 +19,16 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 
 - **SVG lane graph** — color-coded branches with smooth bezier merges.
 - **Ref chips** inline next to each commit: `HEAD`, local, remote, tag.
-- **Search bar** — text, `@author`, or partial SHA. 280 ms debounce, server-side `git log --grep` / `--author`.
+- **Search bar** — text, `@author`, or a full / partial SHA (the matching commit is listed first). 280 ms debounce, server-side `git log --grep` / `--author`.
 - **File-level history** — open the graph filtered to a single file (`--follow` for renames). Editor title bar button + explorer context menu.
 - **Auto-refresh** — `.git/HEAD`, `refs/**`, `index` watched. Commit, checkout, fetch, stage — graph reloads automatically.
-- **Virtual scrolling** — only the visible window of commit rows is in the DOM. Stays responsive on large histories.
+- **Virtual scrolling with paging** — only the visible rows are in the DOM, and older history loads in pages of 200 as you scroll (up to 5,000 commits per view).
+- **Any file name** — non-ASCII paths (한글, 中文, 日本語 …), spaces and renames are read from git's NUL-separated output, so file lists and diffs work for every name.
 
 ### Multi-repo and remote sync
 
 - **Repo picker** — in a multi-root workspace or a monorepo with several checkouts, the repo name in the header becomes a picker (▾). Switch repos and the whole view follows; the choice is remembered per workspace.
-- **Pull / Push / Fetch** buttons in the header. Push targets the current branch's upstream (publishing to `origin` with `-u` when unset); Pull is fast-forward-only; Fetch runs `--all --prune`.
+- **Pull / Push / Fetch** buttons in the header, with a progress notification. Push targets the current branch's upstream (publishing to `origin` with `-u` when unset); Pull is fast-forward-only; Fetch runs `--all --prune`. Remote operations stop after 2 minutes and never wait on a hidden credential prompt.
 - **`↑ahead ↓behind` badge** shows the current branch versus its upstream.
 - **Force push (with lease)** for rebased/amended branches, from the branch context menu.
 
@@ -115,7 +116,12 @@ cd gitline
 npm install
 npm run compile
 # Press F5 in VS Code to launch the Extension Development Host.
+
+npm run test:unit         # Mocha unit tests against throwaway git repositories
+npm run test:integration  # @vscode/test-cli — runs the extension inside a real VS Code
 ```
+
+CI runs both on Linux, macOS and Windows for every push and pull request.
 
 Bug reports and PRs welcome at [github.com/AzuraLight/gitline/issues](https://github.com/AzuraLight/gitline/issues).
 
