@@ -199,3 +199,81 @@
 .gv-shell .gv-detail[hidden] {
   display: none !important;
 }
+
+/* Changed files — List / Tree toggle and folder rows */
+
+.gv-shell .gv-detail-files-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gv-shell .gv-file-view-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 6px;
+  line-height: 1;
+}
+
+.gv-shell .gv-file-view-btn[aria-pressed="true"] {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.gv-shell .gv-tree-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.85em;
+  border-bottom: 1px solid color-mix(in srgb, var(--gv-line) 55%, transparent);
+}
+
+.gv-shell .gv-tree-folder:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.gv-shell .gv-tree-folder:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.gv-shell .gv-tree-twisty {
+  flex-shrink: 0;
+  width: 10px;
+  font-size: 0.8em;
+  opacity: 0.75;
+}
+
+.gv-shell .gv-tree-twisty::before {
+  content: "▾";
+}
+
+.gv-shell .gv-tree-folder[aria-expanded="false"] .gv-tree-twisty::before {
+  content: "▸";
+}
+
+.gv-shell .gv-tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.gv-shell .gv-tree-count {
+  flex-shrink: 0;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  text-align: center;
+  font-size: 0.85em;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.gv-shell .gv-detail-files--tree [hidden] {
+  display: none;
+}

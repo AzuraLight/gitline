@@ -24,6 +24,8 @@
   "Drop {0}? Cannot be undone.": "{0}을(를) drop 할까요? 되돌릴 수 없습니다.",
   "Error": "에러",
   "Fetch {0}?": "{0}을(를) fetch 할까요?",
+  "View as tree": "트리로 보기",
+  "View as list": "목록으로 보기",
   "Files changed": "변경된 파일",
   "Force delete branch {0}? Unmerged commits will be lost.": "브랜치 {0}을(를) 강제 삭제할까요? 머지되지 않은 커밋이 사라집니다.",
   "Gitline": "Gitline",

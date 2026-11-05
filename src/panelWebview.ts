@@ -51,6 +51,11 @@ let panelViewRef: vscode.WebviewView | undefined;
 let extContext: vscode.ExtensionContext | undefined;
 
 const SELECTED_REPO_KEY = "gitline.selectedRepo";
+const FILE_VIEW_KEY = "gitline.fileView";
+
+function readFileViewPref(): "list" | "tree" {
+  return extContext?.workspaceState.get<string>(FILE_VIEW_KEY) === "tree" ? "tree" : "list";
+}
 /** Upper bound for one graph request — the webview pages up to this in steps as you scroll. */
 const MAX_GRAPH_COMMITS = 5000;
 
@@ -638,7 +643,9 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
       };
       const ui = getCommitGraphWebviewUi();
       const htmlLang = getWebviewHtmlLang();
-      webview.html = buildCommitGraphShellHtml(webview, context.extensionUri, ui, htmlLang);
+      webview.html = buildCommitGraphShellHtml(webview, context.extensionUri, ui, htmlLang, {
+        fileView: readFileViewPref(),
+      });
 
       webview.onDidReceiveMessage(
         (msg: {
@@ -660,8 +667,13 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
           base?: string;
           op?: string;
           root?: string;
+          mode?: string;
           items?: Array<{ sha?: string; subject?: string; action?: string }>;
         }) => {
+          if (msg?.type === "setFileView" && (msg.mode === "list" || msg.mode === "tree")) {
+            void extContext?.workspaceState.update(FILE_VIEW_KEY, msg.mode);
+            return;
+          }
           if (msg?.type === "selectRepo" && typeof msg.root === "string") {
             void selectRepoAndReload(webview, msg.root);
             return;

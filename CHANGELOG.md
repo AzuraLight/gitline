@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0 (unreleased)
+
+### Added
+
+- **Tree view for changed files** (#1). A List / Tree toggle in the files pane of
+  commit, compare and stash details, remembered per workspace. Single-child folder
+  chains collapse into one row (`src/main/java/com/example`), each folder shows how
+  many files changed under it, and folders open and close with click,
+  Enter / Space or ← / →.
+
+### Internal
+
+- The webview script and stylesheet are split into components under
+  `media/webview/` and `media/styles/`; unused styles from removed views are gone.
+
 ## 1.2.1
 
 ### Fixed

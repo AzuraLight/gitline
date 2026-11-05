@@ -26,6 +26,7 @@
     loadingMore: false,
     repoList: [],
     selectedRepo: "",
+    fileView: (window.__GV_PREFS__ || {}).fileView === "tree" ? "tree" : "list", // changed-files pane: flat list or folder tree
   };
 
   function saveState() {

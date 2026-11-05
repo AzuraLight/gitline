@@ -29,6 +29,8 @@ export type CommitGraphWebviewUi = {
   filesLabel: string;
   noFiles: string;
   openPatchShort: string;
+  fileViewAsTree: string;
+  fileViewAsList: string;
   workingChanges: string;
   hideMergesTitle: string;
   onlyMergesTitle: string;
@@ -91,6 +93,8 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     filesLabel: vscode.l10n.t("Files changed"),
     noFiles: vscode.l10n.t("No files changed."),
     openPatchShort: vscode.l10n.t("Patch"),
+    fileViewAsTree: vscode.l10n.t("View as tree"),
+    fileViewAsList: vscode.l10n.t("View as list"),
     workingChanges: vscode.l10n.t("Working changes"),
     hideMergesTitle: vscode.l10n.t("Hide merge commits"),
     onlyMergesTitle: vscode.l10n.t("Only merge commits"),

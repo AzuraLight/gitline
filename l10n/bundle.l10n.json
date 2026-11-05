@@ -24,6 +24,8 @@
   "Drop {0}? Cannot be undone.": "Drop {0}? Cannot be undone.",
   "Error": "Error",
   "Fetch {0}?": "Fetch {0}?",
+  "View as tree": "View as tree",
+  "View as list": "View as list",
   "Files changed": "Files changed",
   "Force delete branch {0}? Unmerged commits will be lost.": "Force delete branch {0}? Unmerged commits will be lost.",
   "Gitline": "Gitline",

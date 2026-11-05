@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
 import type { CommitGraphWebviewUi } from "./nls";
 
+/** Per-workspace view preferences the webview needs before its first render. */
+export type CommitGraphPrefs = { fileView: "list" | "tree" };
+
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 }
@@ -24,6 +27,7 @@ const WEBVIEW_MODULES = [
   "laneLayout.js",
   "graphSvg.js",
   "contextMenu.js",
+  "fileTree.js",
   "detailPane.js",
   "rebaseEditor.js",
   "menus.js",
@@ -50,6 +54,7 @@ export function buildCommitGraphShellHtml(
   extensionUri: vscode.Uri,
   ui: CommitGraphWebviewUi,
   htmlLang: string,
+  prefs: CommitGraphPrefs,
 ): string {
   const styleTags = STYLESHEETS.map((name) => {
     const href = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "styles", name));
@@ -173,7 +178,7 @@ export function buildCommitGraphShellHtml(
   </main>
   </div>
   <div id="ctx-menu" class="gv-ctx" role="menu" hidden></div>
-  <script nonce="${nonce}">window.__GV_UI__=${uiJson};</script>
+  <script nonce="${nonce}">window.__GV_UI__=${uiJson};window.__GV_PREFS__=${safeJsonForScript(prefs)};</script>
   ${scriptTags}
 </body>
 </html>`;
