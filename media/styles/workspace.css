@@ -1,0 +1,128 @@
+/* --- Main workspace (graph + preview + actions) --- */
+
+.gv-shell .gv-panel-center {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gv-shell .gv-empty-state {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px var(--gv-space-3);
+  background: radial-gradient(
+      ellipse at 50% 0%,
+      color-mix(in srgb, var(--gv-accent) 10%, transparent),
+      transparent 55%
+    ),
+    var(--gv-surface-0);
+}
+
+.gv-shell .gv-empty-state[hidden] {
+  display: none !important;
+}
+
+.gv-shell .gv-empty-card {
+  max-width: 400px;
+  padding: 22px var(--gv-space-4);
+  border-radius: var(--gv-r-lg);
+  border: 1px solid var(--gv-line);
+  background: var(--gv-surface-1);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--vscode-widget-shadow, #000) 12%, transparent);
+  text-align: center;
+}
+
+.gv-shell .gv-empty-icon {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 14px;
+  border-radius: var(--gv-r-md);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--vscode-charts-blue) 35%, transparent),
+    color-mix(in srgb, var(--vscode-charts-purple, var(--vscode-charts-blue)) 25%, transparent)
+  );
+  opacity: 0.9;
+}
+
+.gv-shell .gv-empty-title {
+  font-weight: 700;
+  font-size: 1.06em;
+  margin-bottom: var(--gv-space-2);
+}
+
+.gv-shell .gv-empty-body {
+  font-size: 0.9em;
+  line-height: 1.55;
+  color: var(--gv-muted);
+}
+
+.gv-shell .gv-graph-workspace {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gv-shell .gv-graph-workspace.gv-workspace-three {
+  flex-direction: row;
+  background: var(--gv-surface-0);
+}
+
+.gv-shell .gv-graph-workspace[hidden] {
+  display: none !important;
+}
+
+.gv-shell .gv-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--gv-surface-0);
+}
+
+.gv-shell .gv-pane-head {
+  flex-shrink: 0;
+  padding: var(--gv-space-2) var(--gv-space-3);
+  border-bottom: 1px solid var(--gv-line);
+  background: color-mix(
+    in srgb,
+    var(--vscode-sideBarSectionHeader-background, var(--vscode-sideBar-background)) 55%,
+    var(--gv-surface-0)
+  );
+}
+
+.gv-shell .gv-pane-head__label {
+  font-size: 0.66em;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--gv-muted);
+}
+
+.gv-shell .gv-pane-head--log {
+  border-left: 3px solid color-mix(in srgb, var(--vscode-terminal-ansiGreen, var(--vscode-charts-green)) 72%, transparent);
+}
+
+.gv-shell .gv-pane-head--preview {
+  border-left: 3px solid color-mix(in srgb, var(--vscode-terminal-ansiBlue, var(--vscode-charts-blue)) 68%, transparent);
+}
+
+.gv-shell .gv-pane-log {
+  flex: 1.4;
+  min-width: 140px;
+  border-right: 1px solid var(--gv-line-strong);
+}
+
+.gv-shell .gv-pane-preview {
+  flex: 1;
+  min-width: 120px;
+  border-right: 1px solid var(--gv-line-strong);
+  background: color-mix(in srgb, var(--gv-surface-1) 55%, var(--gv-surface-0));
+}

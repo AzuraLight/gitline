@@ -1,0 +1,18 @@
+/* Commit graph panel shell                                                    */
+
+body.gv-commit-body.gv-in-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.gv-shell {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}

@@ -1,0 +1,17 @@
+/* Legacy layout (older commit graph HTML paths)                              */
+
+.gv-row {
+  display: flex;
+  gap: 10px;
+  padding: 10px var(--gv-space-2);
+  border-bottom: 1px solid var(--gv-line);
+}
+
+.gv-row-click {
+  cursor: pointer;
+  border-radius: var(--gv-r-md);
+}
+
+.gv-row-click:hover {
+  background: color-mix(in srgb, var(--vscode-list-hoverBackground) 85%, transparent);
+}

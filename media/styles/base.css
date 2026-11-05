@@ -1,0 +1,76 @@
+/* GitViz webview styles — commit panel, blame panel, shared tokens */
+
+:root {
+  color-scheme: light dark;
+  --gv-font-ui: var(--vscode-font-family);
+  --gv-font-mono: var(--vscode-editor-font-family);
+  --gv-r-sm: 4px;
+  --gv-r-md: 8px;
+  --gv-r-lg: 12px;
+  --gv-space-1: 4px;
+  --gv-space-2: 8px;
+  --gv-space-3: 12px;
+  --gv-space-4: 16px;
+  --gv-line: color-mix(in srgb, var(--vscode-panel-border) 88%, transparent);
+  --gv-line-strong: var(--vscode-panel-border);
+  --gv-surface-0: var(--vscode-editor-background);
+  --gv-surface-1: color-mix(in srgb, var(--vscode-sideBar-background) 22%, var(--vscode-editor-background));
+  --gv-surface-2: color-mix(in srgb, var(--vscode-sideBar-background) 48%, var(--vscode-editor-background));
+  --gv-muted: var(--vscode-descriptionForeground);
+  --gv-accent: var(--vscode-textLink-foreground);
+  --gv-focus: var(--vscode-focusBorder);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--gv-font-ui);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: var(--gv-surface-0);
+}
+
+/* Shared header (legacy, used by commit graph topbar variants)                */
+
+.gv-header {
+  padding: var(--gv-space-3) var(--gv-space-4);
+  border-bottom: 1px solid var(--gv-line-strong);
+  background: var(--gv-surface-1);
+  flex-shrink: 0;
+}
+
+.gv-title {
+  font-weight: 600;
+  margin-bottom: var(--gv-space-1);
+  letter-spacing: -0.01em;
+}
+
+.gv-path {
+  opacity: 0.92;
+  word-break: break-all;
+  font-size: 0.95em;
+}
+
+.gv-sub {
+  margin-top: var(--gv-space-2);
+  opacity: 0.72;
+  font-size: 0.88em;
+  word-break: break-all;
+}

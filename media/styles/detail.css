@@ -1,0 +1,201 @@
+/* Shared meta styles (log + detail) */
+
+.gv-hash {
+  font-family: var(--gv-font-mono);
+  background: color-mix(in srgb, var(--vscode-textCodeBlock-background) 90%, var(--gv-surface-0));
+  padding: 2px 6px;
+  border-radius: var(--gv-r-sm);
+  border: 1px solid color-mix(in srgb, var(--gv-line-strong) 35%, transparent);
+  font-size: 0.92em;
+}
+
+.gv-author {
+  opacity: 0.95;
+}
+
+.gv-time {
+  opacity: 0.72;
+  font-size: 0.9em;
+}
+
+.gv-subject {
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.gv-shell .gv-detail-head2 {
+  padding: var(--gv-space-3) var(--gv-space-3) var(--gv-space-2);
+  border-bottom: 1px solid var(--gv-line);
+  background: color-mix(in srgb, var(--gv-surface-1) 50%, var(--gv-surface-0));
+}
+
+.gv-shell .gv-detail-subject2 {
+  font-size: 0.98em;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+
+.gv-shell .gv-detail-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 0.8em;
+  color: var(--gv-muted);
+}
+
+.gv-shell .gv-detail-files-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gv-space-2);
+  padding: var(--gv-space-2) var(--gv-space-3);
+  border-bottom: 1px solid var(--gv-line);
+}
+
+.gv-shell .gv-detail-files-label {
+  font-size: 0.7em;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gv-muted);
+}
+
+.gv-shell .gv-detail-patch-btn {
+  font-size: 0.74em;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--gv-r-sm);
+  border: 1px solid var(--gv-line);
+  background: transparent;
+  color: var(--vscode-foreground);
+  cursor: pointer;
+}
+
+.gv-shell .gv-detail-patch-btn:hover {
+  background: var(--vscode-list-hoverBackground);
+  border-color: var(--gv-focus);
+}
+
+.gv-shell .gv-detail-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.gv-shell .gv-detail-files-loading,
+.gv-shell .gv-detail-files-empty {
+  padding: var(--gv-space-3);
+  font-size: 0.85em;
+  color: var(--gv-muted);
+}
+
+.gv-shell .gv-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--gv-line) 55%, transparent);
+  transition: background 0.08s ease;
+}
+
+.gv-shell .gv-file-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.gv-shell .gv-file-badge {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--gv-font-mono);
+  font-size: 0.7em;
+  font-weight: 800;
+  border-radius: var(--gv-r-sm);
+  background: var(--gv-surface-1);
+  color: var(--gv-muted);
+}
+
+.gv-shell .gv-file-row--A .gv-file-badge { background: color-mix(in srgb, var(--vscode-charts-green, #7ee787) 30%, transparent); color: var(--vscode-charts-green, #7ee787); }
+
+.gv-shell .gv-file-row--D .gv-file-badge { background: color-mix(in srgb, var(--vscode-errorForeground) 25%, transparent); color: var(--vscode-errorForeground); }
+
+.gv-shell .gv-file-row--M .gv-file-badge { background: color-mix(in srgb, var(--vscode-charts-blue, #6cb6ff) 22%, transparent); color: var(--vscode-charts-blue, #6cb6ff); }
+
+.gv-shell .gv-file-row--R .gv-file-badge,
+.gv-shell .gv-file-row--C .gv-file-badge { background: color-mix(in srgb, var(--vscode-charts-purple, #d2a8ff) 22%, transparent); color: var(--vscode-charts-purple, #d2a8ff); }
+
+.gv-shell .gv-file-path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--gv-font-mono);
+  font-size: 0.85em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gv-shell .gv-file-stat {
+  flex-shrink: 0;
+  display: inline-flex;
+  gap: 6px;
+  font-family: var(--gv-font-mono);
+  font-size: 0.78em;
+  font-variant-numeric: tabular-nums;
+}
+
+.gv-shell .gv-file-stat__ins { color: var(--vscode-charts-green, #7ee787); }
+
+.gv-shell .gv-file-stat__del { color: var(--vscode-errorForeground); }
+
+.gv-shell .gv-pane-preview .gv-detail {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+}
+
+.gv-shell .gv-pane-preview .gv-detail.gv-detail--empty {
+  padding: var(--gv-space-3);
+  display: block;
+}
+
+.gv-shell .gv-detail--empty .gv-detail-hint {
+  line-height: 1.55;
+  font-size: 0.88em;
+  color: var(--gv-muted);
+}
+
+.gv-shell .gv-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gv-space-2) var(--gv-space-3);
+  align-items: baseline;
+  margin-bottom: var(--gv-space-2);
+}
+
+.gv-shell .gv-detail-subject {
+  font-size: 0.98em;
+  font-weight: 600;
+  line-height: 1.45;
+  margin-bottom: var(--gv-space-3);
+}
+
+.gv-shell .gv-detail[hidden] {
+  display: none !important;
+}

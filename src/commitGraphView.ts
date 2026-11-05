@@ -5,6 +5,19 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 }
 
+/** Stylesheets in cascade order — same order as the sections of the former single graph.css. */
+const STYLESHEETS = [
+  "base.css",
+  "shell.css",
+  "toolbar.css",
+  "branch-tree.css",
+  "workspace.css",
+  "commit-list.css",
+  "context-menu.css",
+  "detail.css",
+  "rows.css",
+];
+
 /** Webview scripts in load order — each module reads only what earlier ones put on window.GV. */
 const WEBVIEW_MODULES = [
   "util.js",
@@ -38,7 +51,10 @@ export function buildCommitGraphShellHtml(
   ui: CommitGraphWebviewUi,
   htmlLang: string,
 ): string {
-  const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "graph.css"));
+  const styleTags = STYLESHEETS.map((name) => {
+    const href = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "styles", name));
+    return `<link rel="stylesheet" href="${href}" />`;
+  }).join("\n  ");
   const nonce = getNonce();
   const csp = [
     `default-src 'none'`,
@@ -56,7 +72,7 @@ export function buildCommitGraphShellHtml(
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="${csp}" />
-  <link rel="stylesheet" href="${styleUri}" />
+  ${styleTags}
   <title>${escapeHtml(ui.pageTitle)}</title>
 </head>
 <body class="gv-commit-body gv-in-panel">

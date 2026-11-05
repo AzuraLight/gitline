@@ -1,0 +1,270 @@
+/* Context menu                                                                */
+
+.gv-ctx {
+  position: fixed;
+  z-index: 1000;
+  min-width: 220px;
+  padding: 4px;
+  border-radius: var(--gv-r-md);
+  background: var(--vscode-menu-background, var(--gv-surface-1));
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  border: 1px solid var(--vscode-menu-border, var(--gv-line-strong));
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--vscode-widget-shadow, #000) 35%, transparent);
+  font-family: var(--gv-font-ui);
+  font-size: 0.86em;
+}
+
+.gv-ctx[hidden] {
+  display: none !important;
+}
+
+.gv-ctx__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 5px 12px;
+  border: none;
+  border-radius: var(--gv-r-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.gv-ctx__item:hover,
+.gv-ctx__item:focus-visible {
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+  color: var(--vscode-menu-selectionForeground, var(--vscode-foreground));
+  outline: none;
+}
+
+.gv-ctx__item--danger {
+  color: var(--vscode-errorForeground);
+}
+
+.gv-ctx__item--danger:hover {
+  background: color-mix(in srgb, var(--vscode-errorForeground) 22%, transparent);
+}
+
+.gv-ctx__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: color-mix(in srgb, var(--vscode-menu-separatorBackground, var(--gv-line)) 70%, transparent);
+}
+
+.gv-shell .gv-virtual-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--gv-line) 55%, transparent);
+  transition: background 0.08s ease;
+}
+
+.gv-shell .gv-virtual-row:hover {
+  background: color-mix(in srgb, var(--vscode-list-hoverBackground) 90%, transparent);
+}
+
+.gv-shell .gv-virtual-row--selected {
+  background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 45%, transparent);
+  box-shadow: inset 3px 0 0 var(--gv-accent);
+}
+
+.gv-shell .gv-virtual-dot {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translate(calc(var(--gv-graph-w, 80px) / 2), -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--gv-surface-0);
+}
+
+.gv-shell .gv-virtual-row--working .gv-virtual-dot {
+  background: var(--vscode-charts-orange, #f0883e);
+}
+
+.gv-shell .gv-virtual-row--stash .gv-virtual-dot {
+  background: var(--vscode-charts-yellow, #f1c40f);
+}
+
+.gv-shell .gv-virtual-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--gv-space-3);
+  padding: 0 var(--gv-space-3) 0 var(--gv-space-2);
+  overflow: hidden;
+}
+
+.gv-shell .gv-virtual-title {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 0.85em;
+  letter-spacing: 0.01em;
+}
+
+.gv-shell .gv-virtual-row--working .gv-virtual-title {
+  color: var(--vscode-charts-orange, #f0883e);
+}
+
+.gv-shell .gv-virtual-row--stash .gv-virtual-title {
+  font-family: var(--gv-font-mono);
+  color: var(--vscode-charts-yellow, #f1c40f);
+}
+
+.gv-shell .gv-virtual-sub {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.82em;
+  color: var(--gv-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gv-shell .gv-commit-log-row.gv-unified-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid color-mix(in srgb, var(--gv-line) 55%, transparent);
+  cursor: pointer;
+  transition: background 0.08s ease;
+}
+
+.gv-shell .gv-commit-log-row.gv-unified-row:hover {
+  background: color-mix(in srgb, var(--vscode-list-hoverBackground) 90%, transparent);
+}
+
+.gv-shell .gv-unified-row--selected {
+  background: color-mix(in srgb, var(--vscode-list-activeSelectionBackground) 45%, transparent);
+  box-shadow: inset 3px 0 0 var(--gv-accent);
+}
+
+.gv-shell .gv-unified-commit {
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--gv-space-3) 0 var(--gv-space-2);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--gv-space-3);
+  min-height: 0;
+}
+
+.gv-shell .gv-row-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.gv-shell .gv-row-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8em;
+  color: var(--gv-muted);
+}
+
+.gv-shell .gv-row-right .gv-author {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gv-shell .gv-row-right .gv-time {
+  font-variant-numeric: tabular-nums;
+  min-width: 64px;
+  text-align: right;
+}
+
+.gv-shell .gv-row-right .gv-hash {
+  background: color-mix(in srgb, var(--gv-hash-color, var(--gv-accent)) 14%, transparent);
+  border-color: color-mix(in srgb, var(--gv-hash-color, var(--gv-accent)) 38%, transparent);
+  color: var(--gv-hash-color, var(--gv-accent));
+  font-size: 0.95em;
+}
+
+.gv-shell .gv-unified-subject {
+  line-height: 1;
+  font-weight: 500;
+  font-size: 0.95em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.gv-shell .gv-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 1px 7px;
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1.5;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-family: var(--gv-font-mono);
+  letter-spacing: 0.01em;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gv-shell .gv-ref-chip--head {
+  background: color-mix(in srgb, var(--vscode-charts-green, #7ee787) 22%, transparent);
+  color: var(--vscode-charts-green, #7ee787);
+  border-color: color-mix(in srgb, var(--vscode-charts-green, #7ee787) 55%, transparent);
+}
+
+.gv-shell .gv-ref-chip--head::before {
+  content: "HEAD";
+  font-size: 0.78em;
+  font-weight: 800;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--vscode-charts-green, #7ee787);
+  color: var(--vscode-editor-background);
+}
+
+.gv-shell .gv-ref-chip--local {
+  background: color-mix(in srgb, var(--vscode-charts-blue, #6cb6ff) 18%, transparent);
+  color: var(--vscode-charts-blue, #6cb6ff);
+  border-color: color-mix(in srgb, var(--vscode-charts-blue, #6cb6ff) 50%, transparent);
+}
+
+.gv-shell .gv-ref-chip--remote {
+  background: color-mix(in srgb, var(--vscode-charts-purple, #d2a8ff) 16%, transparent);
+  color: var(--vscode-charts-purple, #d2a8ff);
+  border-color: color-mix(in srgb, var(--vscode-charts-purple, #d2a8ff) 48%, transparent);
+}
+
+.gv-shell .gv-ref-chip--tag {
+  background: color-mix(in srgb, var(--vscode-charts-yellow, #f1c40f) 18%, transparent);
+  color: var(--vscode-charts-yellow, #f1c40f);
+  border-color: color-mix(in srgb, var(--vscode-charts-yellow, #f1c40f) 50%, transparent);
+}
+
+.gv-shell .gv-ref-chip--tag::before {
+  content: "▶";
+  font-size: 0.8em;
+  opacity: 0.85;
+}
+
+.gv-shell .gv-ref-chip--other {
+  background: color-mix(in srgb, var(--gv-muted) 18%, transparent);
+  color: var(--gv-muted);
+  border-color: var(--gv-line);
+}

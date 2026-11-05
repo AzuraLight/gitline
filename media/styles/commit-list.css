@@ -1,0 +1,75 @@
+/* --- Commit list + ASCII graph --- */
+
+.gv-shell .gv-unified-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--gv-surface-0);
+}
+
+.gv-shell .gv-unified-head {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  padding: 6px var(--gv-space-2);
+  font-size: 0.66em;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--gv-muted);
+  border-bottom: 1px solid var(--gv-line);
+  background: color-mix(in srgb, var(--vscode-editor-inactiveSelectionBackground) 16%, transparent);
+}
+
+.gv-shell .gv-unified-head-graph {
+  width: var(--gv-graph-w, 80px);
+  min-width: 60px;
+  flex-shrink: 0;
+  padding-right: var(--gv-space-2);
+  display: flex;
+  align-items: center;
+}
+
+.gv-shell .gv-unified-head-commit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding-left: var(--gv-space-2);
+}
+
+.gv-shell .gv-graph-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--gv-surface-0);
+  --gv-graph-w: 80px;
+}
+
+.gv-shell .gv-graph-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.gv-shell .gv-unified-list {
+  position: relative;
+  z-index: 2;
+  font-size: 13px;
+}
+
+.gv-shell .gv-commit-list-inner {
+  display: flex;
+  flex-direction: column;
+}
+
+.gv-shell .gv-spacer {
+  width: 100%;
+  flex-shrink: 0;
+}
