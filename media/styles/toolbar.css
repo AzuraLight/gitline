@@ -1,9 +1,15 @@
 /* --- Top toolbar --- */
 
+/* One row: title + repo picker on the left, search / filters / sync on the right.
+   Wraps onto a second row only when the panel is too narrow. Banners take a full row. */
 .gv-shell .gv-topbar.gv-header {
   position: relative;
   z-index: 3;
-  padding: var(--gv-space-3) var(--gv-space-3) var(--gv-space-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gv-space-1) var(--gv-space-3);
+  padding: var(--gv-space-2) var(--gv-space-3);
   border-bottom: 1px solid var(--gv-line-strong);
   background: var(--gv-surface-2);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--vscode-widget-shadow, #000) 8%, transparent);
@@ -18,7 +24,14 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--gv-space-2) var(--gv-space-3);
-  margin-bottom: var(--gv-space-1);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
+}
+
+.gv-shell .gv-topbar > .gv-rev-notice,
+.gv-shell .gv-topbar > .gv-rebase-banner {
+  flex-basis: 100%;
 }
 
 .gv-shell .gv-topbar__title-block {
@@ -55,8 +68,10 @@
   background: color-mix(in srgb, var(--vscode-badge-background) 90%, transparent);
   color: var(--vscode-badge-foreground);
   border: 1px solid var(--gv-line);
-  word-break: break-all;
-  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -75,7 +90,9 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--gv-space-2) 12px;
-  padding-top: var(--gv-space-1);
+  flex: 1 1 320px;
+  justify-content: flex-end;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -202,7 +219,7 @@
 
 .gv-shell .gv-repo-picker {
   position: relative;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
 }

@@ -31,14 +31,22 @@
     svg.appendChild(svgEl("path", attrs));
   }
 
-  /** Lanes alive above and below a row that are not the row's own commit. */
+  /**
+   * Lanes alive above and below a row that are not the row's own commit, plus every lane that
+   * was waiting for this row's commit: those run from the row's top edge into its node (a fork
+   * point has one per child branch, each in that branch's colour).
+   */
   function drawPassthroughs(svg, commits, layout, g, m) {
     for (var i = 0; i < commits.length; i++) {
       var lp = layout.perRow[i];
       var cy = g.rowY(i);
       for (var L = 0; L < lp.before.length; L++) {
         var hash = lp.before[L];
-        if (!hash || hash === commits[i].hash) continue;
+        if (!hash) continue;
+        if (hash === commits[i].hash) {
+          addPath(svg, pathCurve(g.laneX(L), cy - m.rowH / 2, g.laneX(lp.lane), cy), laneColor(L), 0.95);
+          continue;
+        }
         var newL = lp.after.indexOf(hash);
         if (newL === -1) continue;
         addPath(svg, pathCurve(g.laneX(L), cy - m.rowH / 2, g.laneX(newL), cy + m.rowH / 2), laneColor(newL), 0.85);

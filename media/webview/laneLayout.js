@@ -25,7 +25,10 @@
       var before = lanes.slice();
       var myLane = lanes.indexOf(c.hash);
       if (myLane === -1) myLane = emptySlot();
-      lanes[myLane] = null;
+      // A commit can be awaited in several lanes (a fork point: each child branch reserved a
+      // lane for it). All of them converge into this node and are freed here — otherwise the
+      // extra lane stays reserved forever and draws a phantom line down the rest of the graph.
+      for (var k = 0; k < lanes.length; k++) if (lanes[k] === c.hash) lanes[k] = null;
       var parentLanes = [];
       var parents = c.parents || [];
       for (var p = 0; p < parents.length; p++) {

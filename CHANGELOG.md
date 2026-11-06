@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.3.1
+
+### Fixed
+
+- **Branch lines broke off at a fork point and a stray line ran down the graph** (#1).
+  When a branch was forked from a commit that other history also leads to, the lane
+  waiting for that commit was never released: the branch's line stopped one row short
+  of its fork point, and an orphan line continued to the bottom of the graph, pushing
+  later branches one column further right. Every lane waiting for a commit now joins
+  its node, in the branch's own colour, and is freed there — as `git log --graph` does.
+
+### Changed
+
+- **One-row header** (#1). Title and repository picker sit on the left, search, merge
+  filters and pull / push / fetch on the right; the row wraps only when the panel is
+  narrow. The full repository path moved into the picker's tooltip.
+
 ## 1.3.0
 
 ### Added

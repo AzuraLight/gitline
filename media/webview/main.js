@@ -140,8 +140,9 @@
     badge.textContent = multi ? line + " ▾" : line;
     badge.title = repoAbsPath;
     badge.classList.toggle("gv-repo-badge--picker", multi);
+    // The full path lives in the badge tooltip; a separate path row cost a whole header line.
     full.textContent = repoAbsPath;
-    full.hidden = false;
+    full.hidden = true;
   }
 
   function closeRepoMenu() {
