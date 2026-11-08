@@ -58,5 +58,17 @@
     return { perRow: perRow, totalLanes: maxLanes };
   }
 
-  return { computeLaneLayout: computeLaneLayout };
+  /**
+   * Where lane L of row `row` continues below it, or -1 if it ends there. Several lanes can await
+   * the same commit (two children of one parent), so a lane that is still alive keeps its own
+   * column instead of jumping to the first lane with the same hash.
+   */
+  function passthroughTarget(row, L) {
+    var hash = row.before[L];
+    if (!hash) return -1;
+    if (row.after[L] === hash) return L;
+    return row.after.indexOf(hash);
+  }
+
+  return { computeLaneLayout: computeLaneLayout, passthroughTarget: passthroughTarget };
 });

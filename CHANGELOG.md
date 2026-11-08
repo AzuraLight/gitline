@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.2
+
+### Fixed
+
+- **Branch lines still bent into a neighbouring column when two lanes waited for the same
+  commit** (#1). When a merged branch and a mainline commit share a parent, both lanes
+  wait for it until it is drawn. A lane passing a row looked up where it continues by
+  hash and took the first match, so it bent into the other lane's column and the line
+  broke between the two rows. A lane that is still alive now keeps its own column. The
+  same break showed up at fork points, octopus merges and back-to-back merges of
+  branches from one commit; every layout test now also checks that the drawn lines
+  are connected.
+
 ## 1.3.1
 
 ### Fixed

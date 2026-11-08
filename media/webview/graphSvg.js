@@ -47,7 +47,7 @@
           addPath(svg, pathCurve(g.laneX(L), cy - m.rowH / 2, g.laneX(lp.lane), cy), laneColor(L), 0.95);
           continue;
         }
-        var newL = lp.after.indexOf(hash);
+        var newL = GV.laneLayout.passthroughTarget(lp, L);
         if (newL === -1) continue;
         addPath(svg, pathCurve(g.laneX(L), cy - m.rowH / 2, g.laneX(newL), cy + m.rowH / 2), laneColor(newL), 0.85);
       }

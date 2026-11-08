@@ -8,9 +8,37 @@ type Layout = {
 };
 // The webview module is plain JS shared with the browser; it exports via module.exports under Node.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { computeLaneLayout } = require(path.resolve(__dirname, "../../../media/webview/laneLayout.js")) as {
+const { computeLaneLayout, passthroughTarget } = require(path.resolve(__dirname, "../../../media/webview/laneLayout.js")) as {
   computeLaneLayout: (commits: Commit[]) => Layout;
+  passthroughTarget: (row: Layout["perRow"][number], lane: number) => number;
 };
+
+describe("passthroughTarget", () => {
+  it("keeps a lane in its column when another lane awaits the same parent", () => {
+    // Issue #1 (after 1.3.1): merge m brings in o2→o1, which forked from p; main's c also has
+    // parent p. On c's row both lanes await p — the orange lane must run straight down, not
+    // bend into c's column.
+    const layout = computeLaneLayout([
+      { hash: "m", parents: ["c", "o2"] },
+      { hash: "o2", parents: ["o1"] },
+      { hash: "o1", parents: ["p"] },
+      { hash: "c", parents: ["p"] },
+      { hash: "p", parents: [] },
+    ]);
+    const cRow = layout.perRow[3];
+    assert.deepStrictEqual(cRow.after, ["p", "p"]);
+    assert.strictEqual(passthroughTarget(cRow, 1), 1);
+    // On p's row both lanes converge into the node.
+    assert.deepStrictEqual(layout.perRow[4].before, ["p", "p"]);
+    assert.strictEqual(layout.perRow[4].lane, 0);
+  });
+
+  it("follows a lane that moved, and ends one that closed", () => {
+    const row = { lane: 0, before: ["a", "b"], after: [null, "a"], parentLanes: [] };
+    assert.strictEqual(passthroughTarget(row, 0), 1);
+    assert.strictEqual(passthroughTarget(row, 1), -1);
+  });
+});
 
 describe("computeLaneLayout", () => {
   it("keeps a linear history in one lane", () => {
@@ -72,6 +100,27 @@ describe("computeLaneLayout", () => {
       assert.strictEqual(r.parentLanes.length, (c.parents || []).length, `row ${i}: one lane per parent`);
       r.parentLanes.forEach((l, p) => assert.strictEqual(r.after[l], c.parents[p], `row ${i}: parent ${p} lane`));
       assert.ok(r.after.length === 0 || r.after[r.after.length - 1] !== null, `row ${i}: trailing empty lane`);
+      assertDrawable(c, r, i);
+    });
+  }
+
+  /**
+   * What graphSvg draws must be connected: every lane alive below a row is fed either by a
+   * passthrough from above or by the node's own parent edge, a lane that still holds the same hash
+   * runs straight down, and a passthrough always lands on a lane awaiting that same hash.
+   */
+  function assertDrawable(c: Commit, r: Layout["perRow"][number], i: number): void {
+    const fed = new Set<number>(r.parentLanes);
+    r.before.forEach((h, L) => {
+      if (!h || h === c.hash) return;
+      const t = passthroughTarget(r, L);
+      assert.notStrictEqual(t, -1, `row ${i}: lane ${L} (${h}) vanishes without reaching its commit`);
+      assert.strictEqual(r.after[t], h, `row ${i}: lane ${L} lands on a lane for another commit`);
+      if (r.after[L] === h) assert.strictEqual(t, L, `row ${i}: lane ${L} (${h}) bends although its column stays`);
+      fed.add(t);
+    });
+    r.after.forEach((h, L) => {
+      if (h) assert.ok(fed.has(L), `row ${i}: lane ${L} (${h}) starts from nowhere`);
     });
   }
 
@@ -126,6 +175,52 @@ describe("computeLaneLayout", () => {
       commits: [
         { hash: "a2", parents: ["a1"] }, { hash: "b2", parents: ["b1"] },
         { hash: "a1", parents: [] }, { hash: "b1", parents: [] },
+      ],
+      lanes: 2,
+    },
+    {
+      name: "merged branch and main commit share a parent (issue #1 screenshot)",
+      commits: [
+        { hash: "m", parents: ["c", "o3"] }, { hash: "o3", parents: ["o2"] }, { hash: "o2", parents: ["o1"] },
+        { hash: "o1", parents: ["p"] }, { hash: "c", parents: ["p"] }, { hash: "p", parents: ["q"] },
+        { hash: "q", parents: [] },
+      ],
+      lanes: 2,
+    },
+    {
+      name: "several main commits pass while two lanes await the same parent",
+      commits: [
+        { hash: "m", parents: ["c3", "o1"] }, { hash: "o1", parents: ["p"] }, { hash: "c3", parents: ["c2"] },
+        { hash: "c2", parents: ["c1"] }, { hash: "c1", parents: ["p"] }, { hash: "p", parents: [] },
+      ],
+      lanes: 2,
+    },
+    {
+      name: "three lanes await one parent, a third lane passes between them",
+      commits: [
+        { hash: "m", parents: ["a", "b", "x"] }, { hash: "x", parents: ["y"] }, { hash: "b", parents: ["p"] },
+        { hash: "a", parents: ["p"] }, { hash: "p", parents: ["y"] }, { hash: "y", parents: [] },
+      ],
+    },
+    {
+      name: "duplicate-awaited parent with an unrelated lane to its right",
+      commits: [
+        { hash: "t", parents: ["z"] }, { hash: "m", parents: ["c", "o"] }, { hash: "o", parents: ["p"] },
+        { hash: "c", parents: ["p"] }, { hash: "p", parents: ["z"] }, { hash: "z", parents: [] },
+      ],
+    },
+    {
+      name: "back-to-back merges of branches forked from the same commit",
+      commits: [
+        { hash: "m2", parents: ["m1", "g"] }, { hash: "g", parents: ["p"] }, { hash: "m1", parents: ["c", "f"] },
+        { hash: "f", parents: ["p"] }, { hash: "c", parents: ["p"] }, { hash: "p", parents: [] },
+      ],
+    },
+    {
+      name: "first-parent lane left of a duplicate that frees first",
+      commits: [
+        { hash: "m", parents: ["o", "c"] }, { hash: "c", parents: ["p"] }, { hash: "o", parents: ["p"] },
+        { hash: "p", parents: [] },
       ],
       lanes: 2,
     },
