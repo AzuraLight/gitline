@@ -2,6 +2,8 @@
 (function (GV) {
   "use strict";
   var u = GV.util;
+  /** Must match ALL_REFS in src/gitExec.ts. */
+  GV.ALL_REFS = ":all";
 
   GV.createBranchTree = function (app, menus) {
     var UI = app.UI;
@@ -50,6 +52,20 @@
       return row;
     }
 
+    /** Every branch, remote and tag in one graph; commits not on HEAD are dimmed. */
+    function allRow() {
+      var row = u.el("div", "gv-ref-node");
+      row.setAttribute("role", "none");
+      var btn = u.el("button", "gv-ref-item__btn gv-ref-item__btn--all", UI.branchAllRow || "All branches");
+      btn.type = "button";
+      btn.setAttribute("data-rev", GV.ALL_REFS);
+      btn.setAttribute("role", "treeitem");
+      if (S.selectedRev === GV.ALL_REFS) btn.classList.add("gv-ref-item__btn--selected");
+      btn.addEventListener("click", function () { selectRev(GV.ALL_REFS); });
+      row.appendChild(btn);
+      return row;
+    }
+
     /** entries: [{ rev, label, onContext(x, y) }] */
     function folder(title, extraClass, open, entries, buttonClass, current) {
       var det = u.el("details", "gv-ref-folder" + (extraClass ? " " + extraClass : ""));
@@ -79,6 +95,7 @@
       rootEl.textContent = "";
       var cur = tree.current || "";
       rootEl.appendChild(headRow());
+      rootEl.appendChild(allRow());
       var locals = tree.locals || [];
       if (locals.length) {
         rootEl.appendChild(folder(UI.branchGroupLocal || "Local", "", true, locals.map(function (name) {

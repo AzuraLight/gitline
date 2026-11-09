@@ -280,6 +280,34 @@ export function looksLikeHash(query: string): boolean {
   return /^[0-9a-f]{4,40}$/i.test(query);
 }
 
+/**
+ * View id for "every branch": local and remote branches, tags and HEAD (so a detached HEAD
+ * shows too). Not `--all`, which would also pull in stash internals as graph nodes.
+ * `:` cannot appear in a ref name, so this never collides with a real branch.
+ */
+export const ALL_REFS = ":all";
+
+function revArgs(rev: string, headBorn = true): string[] {
+  if (rev !== ALL_REFS) return [rev];
+  // An unborn HEAD (new repo, or `checkout --orphan`) is a fatal "unknown revision" for git log;
+  // without it the other refs still list, and no refs at all is simply an empty log.
+  return headBorn ? ["--branches", "--remotes", "--tags", "HEAD"] : ["--branches", "--remotes", "--tags"];
+}
+
+/**
+ * Hashes reachable from `rev` but not from HEAD, at most `cap` of them. Undefined for HEAD's own
+ * log (nothing to dim) or when it cannot be computed (unborn HEAD) — callers then dim nothing.
+ */
+export async function readOffHeadHashes(cwd: string, rev: string | undefined, cap: number): Promise<Set<string> | undefined> {
+  const target = rev?.trim();
+  if (!target) return undefined;
+  // --topo-order matches the graph's order, so at the cap it is the oldest rows that go undimmed.
+  // The trailing "--" keeps a file named HEAD (or like a branch) from being read as a path.
+  const out = await tryGit(cwd, ["rev-list", "--topo-order", `--max-count=${cap}`, ...revArgs(target), "--not", "HEAD", "--"]);
+  if (out === null) return undefined;
+  return new Set(out.split("\n").map((s) => s.trim()).filter(Boolean));
+}
+
 export async function readRecentCommits(
   cwd: string,
   limit: number,
@@ -290,8 +318,13 @@ export async function readRecentCommits(
 ): Promise<GitCommitRow[]> {
   const target = rev?.trim();
   const logArgs = ["log"];
-  if (target && target.length > 0) {
-    logArgs.push(target);
+  if (!target || target === ALL_REFS) {
+    // HEAD with no commits yet: HEAD's own log is empty rather than a git error card.
+    const headBorn = await revExists(cwd, "HEAD");
+    if (!target && !headBorn) return [];
+    if (target) logArgs.push(...revArgs(target, headBorn));
+  } else {
+    logArgs.push(...revArgs(target));
   }
   logArgs.push(`--max-count=${limit}`, `--pretty=format:${COMMIT_FORMAT}`, "--topo-order");
   if (mergesMode === "hide") {
@@ -313,6 +346,10 @@ export async function readRecentCommits(
   const pf = pathFilter?.trim();
   if (pf && pf.length > 0) {
     logArgs.push("--follow", "--", pf);
+  } else {
+    // End the revisions explicitly: otherwise a file named HEAD or like a branch makes git
+    // stop with "ambiguous argument".
+    logArgs.push("--");
   }
   const rows = parseCommitRows(await execGit(cwd, logArgs));
 

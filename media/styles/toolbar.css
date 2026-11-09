@@ -476,6 +476,12 @@
   box-shadow: inset 3px 0 0 #f0883e;
 }
 
+/* Commit not reachable from HEAD (all-branches or another branch's view): text fades, ref chips stay readable. */
+.gv-shell .gv-unified-row--offhead .gv-subject,
+.gv-shell .gv-unified-row--offhead .gv-row-right {
+  opacity: 0.5;
+}
+
 .gv-shell .gv-rebase-list {
   list-style: none;
   margin: 0;

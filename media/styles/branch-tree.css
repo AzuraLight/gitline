@@ -153,12 +153,14 @@
   mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M11.5 4a1.5 1.5 0 1 0-2 1.41V7H7a2 2 0 0 0-2 2v.59A1.5 1.5 0 1 0 6 9.59V9a1 1 0 0 1 1-1h2.5a1 1 0 0 1 1-1V5.41A1.5 1.5 0 0 0 11.5 4zM4.5 13a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1zM10 5a.5.5 0 1 1 1 0 .5.5 0 0 1-1 0z'/></svg>") no-repeat center / 12px;
 }
 
-.gv-shell .gv-ref-item__btn--head {
+.gv-shell .gv-ref-item__btn--head,
+.gv-shell .gv-ref-item__btn--all {
   padding-left: 8px;
   font-weight: 600;
 }
 
-.gv-shell .gv-ref-item__btn--head::before {
+.gv-shell .gv-ref-item__btn--head::before,
+.gv-shell .gv-ref-item__btn--all::before {
   display: none;
 }
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.4.0
+
+### Added
+
+- **All branches view** (#1). A new *All branches* row under *HEAD (default log)* shows
+  every local and remote branch and tag in one graph (`git log --branches --remotes
+  --tags HEAD` — not `--all`, so stash internals stay out of the graph).
+- **Commits not on the current branch are dimmed** (#1). In *All branches*, and when
+  you click a single branch, commits that `HEAD` cannot reach fade (text and node); ref
+  chips stay readable. Computed by git (`rev-list … --not HEAD`), so it stays right
+  with search, merge filters and paging. *HEAD (default log)* is unchanged. Screen
+  readers announce dimmed rows as "Not on the current branch".
+
+### Fixed
+
+- **A repository with no commits yet showed a raw git error** ("does not have any
+  commits yet") instead of an empty graph. The same happened on an orphan branch
+  (`git checkout --orphan`). HEAD's log is now simply empty, and *All branches* still
+  lists the other branches when HEAD has no commits.
+- **A file named like a branch (or `HEAD`) broke that branch's history** with git's
+  "ambiguous argument" error. Revisions are now always ended with `--`, so files can
+  never be mistaken for refs.
+
 ## 1.3.2
 
 ### Fixed

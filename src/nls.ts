@@ -14,6 +14,8 @@ export type CommitGraphWebviewUi = {
   branchBarAria: string;
   branchBarTitle: string;
   branchHeadRow: string;
+  branchAllRow: string;
+  commitNotOnHead: string;
   branchGroupLocal: string;
   branchGroupRemote: string;
   paneLogAria: string;
@@ -76,6 +78,8 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     branchBarAria: vscode.l10n.t("Branches and remotes"),
     branchBarTitle: vscode.l10n.t("Branches"),
     branchHeadRow: vscode.l10n.t("HEAD (default log)"),
+    branchAllRow: vscode.l10n.t("All branches"),
+    commitNotOnHead: vscode.l10n.t("Not on the current branch"),
     branchGroupLocal: vscode.l10n.t("Local"),
     branchGroupRemote: vscode.l10n.t("Remote: {0}"),
     paneLogAria: vscode.l10n.t("Graph and commit list"),

@@ -40,6 +40,8 @@
   "Graph": "Graph",
   "HARD reset to {0}? Discards local commits and changes after that point.": "HARD reset to {0}? Discards local commits and changes after that point.",
   "HEAD (default log)": "HEAD (default log)",
+  "All branches": "All branches",
+  "Not on the current branch": "Not on the current branch",
   "Invalid branch name": "Invalid branch name",
   "Invalid tag name": "Invalid tag name",
   "Loading…": "Loading…",

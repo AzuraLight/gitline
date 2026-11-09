@@ -81,11 +81,14 @@
       var lane = layout.perRow[i].lane;
       var color = laneColor(lane);
       var cx = g.laneX(lane), cy = g.rowY(i);
-      svg.appendChild(svgEl("circle", { cx: cx, cy: cy, r: m.nodeR + 3, fill: color, opacity: "0.18" }));
-      svg.appendChild(svgEl("circle", {
+      var off = !!commits[i].offHead; // not on HEAD: the node fades with its row's text
+      svg.appendChild(svgEl("circle", { cx: cx, cy: cy, r: m.nodeR + 3, fill: color, opacity: off ? "0.08" : "0.18" }));
+      var node = {
         cx: cx, cy: cy, r: m.nodeR, fill: color,
         stroke: "var(--vscode-editor-background)", "stroke-width": 2,
-      }));
+      };
+      if (off) node["fill-opacity"] = "0.45";
+      svg.appendChild(svgEl("circle", node));
     }
   }
 

@@ -40,6 +40,8 @@
   "Graph": "그래프",
   "HARD reset to {0}? Discards local commits and changes after that point.": "{0}로 HARD 리셋할까요? 이후 로컬 커밋과 변경사항이 모두 사라집니다.",
   "HEAD (default log)": "HEAD (기본 로그)",
+  "All branches": "모든 브랜치",
+  "Not on the current branch": "현재 브랜치에 없는 커밋",
   "Invalid branch name": "잘못된 브랜치 이름",
   "Invalid tag name": "잘못된 태그 이름",
   "Loading…": "불러오는 중…",

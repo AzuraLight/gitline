@@ -1,4 +1,4 @@
-# README GIF 1 — browse history: a merge, a branch's own history, back to HEAD, scroll.
+# README GIF 1 — browse history: a merge, a branch's own history, back to HEAD, all branches, scroll.
 #   node tools/demo/build.js list
 #   tourcast record tools/demo/tourcast/scenarios/graph-tour.yaml -o out-demo/graph-tour.mp4
 version: 1
@@ -41,9 +41,15 @@ steps:
     hold: 1.4
 
   - click: branch.head
-    caption: Back to the full log
+    caption: Back to the current branch
   - wait_ready: head_view
     hold: 0.8
+
+  - click: branch.all
+    caption: All branches — commits not on HEAD are dimmed
+    spotlight: true
+  - wait_ready: all_view
+    hold: 1.8
 
   - scroll: { to: bottom, in: graph.canvas, duration: 2.0, easing: out_quad }
     caption: Older history loads as you scroll

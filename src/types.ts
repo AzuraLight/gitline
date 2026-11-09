@@ -13,6 +13,8 @@ export type GitCommitRow = {
   author: string;
   dateSec: number;
   refs: GitCommitRef[];
+  /** Set when the view is not HEAD's own log and this commit is not reachable from HEAD. */
+  offHead?: boolean;
 };
 
 /** Grouped refs for the branch tree (SourceTree-style sidebar). */

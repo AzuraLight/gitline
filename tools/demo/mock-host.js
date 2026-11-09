@@ -129,8 +129,22 @@
   }
 
   function graphPayload(req) {
+    // Same views as the extension: HEAD's own log, one branch, or every branch (":all"); outside
+    // HEAD's log, commits HEAD cannot reach carry offHead so the webview dims them.
     var rev = req.rev || "";
-    var list = rev ? reachableFrom(tips[rev] || tips[rev.replace(/^origin\//, "")]) : commits;
+    var onHead = {};
+    reachableFrom(tips.main).forEach(function (c) { onHead[c.hash] = true; });
+    var list = rev === ":all" ? commits
+      : rev ? reachableFrom(tips[rev] || tips[rev.replace(/^origin\//, "")])
+      : reachableFrom(tips.main);
+    if (rev) {
+      list = list.map(function (c) {
+        if (onHead[c.hash]) return c;
+        var copy = Object.assign({}, c);
+        copy.offHead = true;
+        return copy;
+      });
+    }
     var q = (req.query || "").toLowerCase();
     if (q) list = list.filter(function (c) { return c.subject.toLowerCase().indexOf(q) >= 0 || c.hash.indexOf(q) === 0; });
     return {

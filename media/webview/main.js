@@ -134,7 +134,7 @@
       full.hidden = true;
       return;
     }
-    var suffix = viewRev || branch || "";
+    var suffix = viewRev === GV.ALL_REFS ? (UI.branchAllRow || "All branches") : (viewRev || branch || "");
     var line = u.baseName(repoAbsPath) + (suffix ? " · " + suffix : "");
     var multi = S.repoList.length > 1;
     badge.textContent = multi ? line + " ▾" : line;

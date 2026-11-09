@@ -1,7 +1,9 @@
 import * as assert from "assert";
 import * as os from "os";
 import {
+  ALL_REFS,
   looksLikeHash,
+  readOffHeadHashes,
   parseChangedFiles,
   readBlobAt,
   readCommitFiles,
@@ -109,6 +111,327 @@ describe("git readers against a real repository", function () {
   it("reports no parent for the root commit", async () => {
     assert.strictEqual(await readFirstParent(repo.root, rootCommit), "");
     assert.strictEqual(await readFirstParent(repo.root, renameCommit), rootCommit);
+  });
+});
+
+describe("all-branches view and commits off HEAD", function () {
+  this.timeout(30_000);
+  let repo: TempRepo;
+  let base: string, onMain: string, feature: string, tagged: string, merged: string;
+
+  before(() => {
+    repo = new TempRepo();
+    base = repo.commitEmpty("base");
+    repo.git("checkout", "-q", "-b", "feature");
+    feature = repo.commitEmpty("feature work");
+    repo.git("checkout", "-q", "-b", "topic", base);
+    merged = repo.commitEmpty("topic work");
+    repo.git("checkout", "-q", "--detach", base);
+    tagged = repo.commitEmpty("tagged only");
+    repo.git("tag", "v-orphan");
+    repo.git("checkout", "-q", "main");
+    onMain = repo.commitEmpty("main work");
+    repo.git("merge", "-q", "--no-ff", "topic", "-m", "merge topic");
+    // A stash must not show up as graph nodes (that is why the view is not `--all`).
+    repo.write("wip.txt", "x\n");
+    repo.git("add", "wip.txt");
+    repo.git("stash", "push", "-q", "-m", "wip");
+  });
+
+  after(() => repo.dispose());
+
+  it("lists every branch and tag, but not stash internals", async () => {
+    const subjects = (await readRecentCommits(repo.root, 100, ALL_REFS)).map((c) => c.subject);
+    for (const s of ["merge topic", "main work", "topic work", "feature work", "tagged only", "base"]) {
+      assert.ok(subjects.includes(s), `missing ${s}`);
+    }
+    assert.ok(!subjects.some((s) => s.includes("wip") || s.startsWith("index on")), subjects.join(", "));
+  });
+
+  it("marks only commits HEAD cannot reach", async () => {
+    const off = await readOffHeadHashes(repo.root, ALL_REFS, 1000);
+    assert.deepStrictEqual([...(off ?? [])].sort(), [feature, tagged].sort());
+    assert.ok(!off?.has(merged) && !off?.has(onMain) && !off?.has(base));
+  });
+
+  it("dims a single branch's view too, and nothing for HEAD's own log", async () => {
+    assert.deepStrictEqual([...((await readOffHeadHashes(repo.root, "feature", 1000)) ?? [])], [feature]);
+    assert.strictEqual(await readOffHeadHashes(repo.root, undefined, 1000), undefined);
+    assert.strictEqual(await readOffHeadHashes(repo.root, "", 1000), undefined);
+  });
+});
+
+describe("all-branches view: edge cases", function () {
+  this.timeout(30_000);
+  let repo: TempRepo;
+  let base: string, feature: string, remoteOnly: string;
+
+  before(() => {
+    repo = new TempRepo();
+    repo.write("a.txt", "1\n");
+    base = repo.commitAll("base");
+    repo.git("checkout", "-q", "-b", "feature");
+    repo.append("a.txt", "2\n");
+    feature = repo.commitAll("feature edits a.txt");
+    repo.commitEmpty("feature empty");
+    repo.git("checkout", "-q", "--detach", base);
+    remoteOnly = repo.commitEmpty("only on origin");
+    // A remote-tracking branch with no local counterpart.
+    repo.git("update-ref", "refs/remotes/origin/remote-only", remoteOnly);
+    repo.git("checkout", "-q", "-b", "topic", base);
+    repo.commitEmpty("topic work");
+    repo.git("checkout", "-q", "main");
+    repo.git("merge", "-q", "--no-ff", "-m", "merge topic", "topic");
+    // A tag that points at a tree, not a commit (git.git and linux.git have these).
+    repo.git("tag", "tree-tag", `${base}^{tree}`);
+  });
+
+  after(() => repo.dispose());
+
+  const subjects = (rows: { subject: string }[]) => rows.map((r) => r.subject);
+
+  it("includes remote-only branches and survives a tag that points at a tree", async () => {
+    const rows = await readRecentCommits(repo.root, 100, ALL_REFS);
+    assert.ok(subjects(rows).includes("only on origin"));
+    assert.ok(subjects(rows).includes("feature empty"));
+    const off = await readOffHeadHashes(repo.root, ALL_REFS, 1000);
+    assert.ok(off?.has(remoteOnly) && off?.has(feature) && !off?.has(base));
+  });
+
+  it("keeps dimming right under search, hidden merges and a file filter", async () => {
+    const searched = await readRecentCommits(repo.root, 100, ALL_REFS, undefined, "feature");
+    assert.deepStrictEqual(subjects(searched).sort(), ["feature edits a.txt", "feature empty"]);
+    const all = await readRecentCommits(repo.root, 100, ALL_REFS);
+    assert.ok(all.some((r) => r.parents.length === 2), "fixture has a merge");
+    const noMerges = await readRecentCommits(repo.root, 100, ALL_REFS, undefined, undefined, "hide");
+    assert.ok(noMerges.length === all.length - 1 && noMerges.every((r) => r.parents.length < 2));
+    const onlyMerges = await readRecentCommits(repo.root, 100, ALL_REFS, undefined, undefined, "only");
+    assert.deepStrictEqual(subjects(onlyMerges), ["merge topic"]);
+    const fileHistory = await readRecentCommits(repo.root, 100, ALL_REFS, "a.txt");
+    assert.deepStrictEqual(subjects(fileHistory), ["feature edits a.txt", "base"]);
+    // The dim set is computed independently of the filters, so filtered rows keep their status.
+    const off = await readOffHeadHashes(repo.root, ALL_REFS, 1000);
+    assert.ok(searched.every((r) => off?.has(r.hash)), "searched feature commits stay dimmed");
+    assert.deepStrictEqual(fileHistory.map((r) => off?.has(r.hash) ?? false), [true, false]);
+    assert.ok(onlyMerges.every((r) => !off?.has(r.hash)), "the merge on main is not dimmed");
+  });
+
+  it("follows a detached HEAD", async () => {
+    repo.git("checkout", "-q", "--detach", feature);
+    try {
+      const rows = await readRecentCommits(repo.root, 100, ALL_REFS);
+      assert.ok(rows.some((r) => r.hash === feature));
+      const off = await readOffHeadHashes(repo.root, ALL_REFS, 1000);
+      assert.ok(!off?.has(feature) && !off?.has(base), "HEAD's own ancestry is not dimmed");
+      assert.ok(off?.has(remoteOnly));
+    } finally {
+      repo.git("checkout", "-q", "main");
+    }
+  });
+
+  it("dims nothing when the chosen branch is HEAD itself", async () => {
+    assert.strictEqual((await readOffHeadHashes(repo.root, "main", 1000))?.size, 0);
+  });
+
+  it("stops at the cap instead of failing", async () => {
+    assert.strictEqual((await readOffHeadHashes(repo.root, ALL_REFS, 1))?.size, 1);
+  });
+});
+
+describe("all-branches view: refs that must stay out, odd tags, shallow history", function () {
+  this.timeout(30_000);
+  let repo: TempRepo;
+  let base: string, side: string, annotatedOff: string;
+
+  before(() => {
+    repo = new TempRepo();
+    repo.write("a.txt", "1\n");
+    base = repo.commitAll("base");
+    // Two branches on the same tip: the commit must be listed once.
+    repo.git("branch", "twin");
+    repo.git("checkout", "-q", "-b", "side");
+    side = repo.commitEmpty("side work");
+    repo.git("update-ref", "refs/remotes/origin/side", side);
+    repo.git("checkout", "-q", "--detach", base);
+    annotatedOff = repo.commitEmpty("annotated tag only");
+    repo.git("tag", "-a", "v-annotated", "-m", "release notes");
+    // An annotated tag that points at a blob.
+    const blob = repo.git("rev-parse", `${base}:a.txt`).trim();
+    repo.git("tag", "-a", "blob-tag", "-m", "a file", blob);
+    repo.git("checkout", "-q", "main");
+    // Notes and an untracked-files stash create commits under refs/notes and refs/stash.
+    repo.git("notes", "add", "-m", "a note", base);
+    repo.write("untracked.txt", "u\n");
+    repo.git("stash", "push", "-q", "-u", "-m", "with untracked");
+  });
+
+  after(() => repo.dispose());
+
+  it("keeps notes and stash commits (incl. the untracked-files commit) out of the graph", async () => {
+    const rows = await readRecentCommits(repo.root, 100, ALL_REFS);
+    const subjects = rows.map((r) => r.subject);
+    assert.ok(!subjects.some((s) => /Notes added|with untracked|untracked files on|index on/.test(s)), subjects.join(" | "));
+    assert.ok(rows.every((r) => r.parents.length <= 2), "a 3-parent stash commit leaked in");
+  });
+
+  it("lists a commit shared by several branches once", async () => {
+    const rows = await readRecentCommits(repo.root, 100, ALL_REFS);
+    assert.strictEqual(rows.filter((r) => r.hash === base).length, 1);
+    assert.strictEqual(new Set(rows.map((r) => r.hash)).size, rows.length);
+  });
+
+  it("follows annotated tags to their commit and ignores one that points at a blob", async () => {
+    const rows = await readRecentCommits(repo.root, 100, ALL_REFS);
+    assert.ok(rows.some((r) => r.hash === annotatedOff));
+    const off = await readOffHeadHashes(repo.root, ALL_REFS, 1000);
+    assert.deepStrictEqual([...(off ?? [])].sort(), [side, annotatedOff].sort());
+  });
+
+  it("dims a remote branch's own commits when it is viewed alone", async () => {
+    assert.deepStrictEqual([...((await readOffHeadHashes(repo.root, "origin/side", 1000)) ?? [])], [side]);
+  });
+
+  it("works on a shallow fetch whose parents are missing", async () => {
+    const shallow = new TempRepo();
+    try {
+      shallow.commitEmpty("local only");
+      shallow.git("fetch", "-q", "--depth=1", `file://${repo.root}`, `side:refs/remotes/origin/side`);
+      const rows = await readRecentCommits(shallow.root, 100, ALL_REFS);
+      const tip = rows.find((r) => r.hash === side);
+      assert.ok(tip, "shallow tip listed");
+      assert.ok(rows.every((r) => r.hash !== base), "beyond the shallow boundary is not listed");
+      const off = await readOffHeadHashes(shallow.root, ALL_REFS, 1000);
+      assert.deepStrictEqual([...(off ?? [])], [side]);
+    } finally {
+      shallow.dispose();
+    }
+  });
+});
+
+describe("views when a file shares a name with a ref", function () {
+  this.timeout(30_000);
+  let repo: TempRepo;
+  let side: string;
+  before(() => {
+    repo = new TempRepo();
+    repo.commitEmpty("base");
+    repo.git("checkout", "-q", "-b", "side");
+    side = repo.commitEmpty("side work");
+    repo.git("checkout", "-q", "main");
+    // Untracked files named like HEAD and like a branch: git must not read them as paths.
+    repo.write("HEAD", "not a ref\n");
+    repo.write("side", "not a branch\n");
+  });
+  after(() => repo.dispose());
+
+  it("still lists every view", async () => {
+    assert.ok((await readRecentCommits(repo.root, 100, ALL_REFS)).some((r) => r.hash === side));
+    assert.ok((await readRecentCommits(repo.root, 100, "side")).some((r) => r.hash === side));
+    assert.strictEqual((await readRecentCommits(repo.root, 100)).length, 1);
+  });
+
+  it("still dims", async () => {
+    assert.deepStrictEqual([...((await readOffHeadHashes(repo.root, ALL_REFS, 1000)) ?? [])], [side]);
+    assert.deepStrictEqual([...((await readOffHeadHashes(repo.root, "side", 1000)) ?? [])], [side]);
+  });
+});
+
+describe("all-branches view: names, worktrees and searches", function () {
+  this.timeout(30_000);
+  let repo: TempRepo;
+  let base: string, korean: string, dup: string;
+
+  before(() => {
+    repo = new TempRepo();
+    base = repo.commitEmpty("base");
+    repo.git("checkout", "-q", "-b", "기능/검색");
+    korean = repo.commitEmpty("korean branch work");
+    // A branch and a tag with the same name: git warns "refname is ambiguous" on stderr only.
+    repo.git("checkout", "-q", "-b", "dup", base);
+    dup = repo.commitEmpty("dup branch work");
+    repo.git("tag", "dup", base);
+    repo.git("checkout", "-q", "main");
+  });
+
+  after(() => repo.dispose());
+
+  it("handles a Korean branch name in both views", async () => {
+    assert.ok((await readRecentCommits(repo.root, 100, "기능/검색")).some((r) => r.hash === korean));
+    assert.deepStrictEqual([...((await readOffHeadHashes(repo.root, "기능/검색", 100)) ?? [])], [korean]);
+  });
+
+  it("treats an ambiguous name (branch and tag) as a warning, not an error", async () => {
+    const rows = await readRecentCommits(repo.root, 100, "dup");
+    assert.ok(rows.length > 0, "the view lists something rather than failing");
+    const off = await readOffHeadHashes(repo.root, "dup", 100);
+    assert.ok(off !== undefined, "dimming is still computed");
+    // git resolves an ambiguous name to the tag first; the branch commit still shows under All.
+    assert.ok((await readRecentCommits(repo.root, 100, ALL_REFS)).some((r) => r.hash === dup));
+  });
+
+  it("never reads a search starting with '-' as a git option", async () => {
+    for (const q of ["--all", "-n", "--output=/tmp/x", "@-x"]) {
+      const rows = await readRecentCommits(repo.root, 100, ALL_REFS, undefined, q);
+      assert.deepStrictEqual(rows, [], `query ${q}`);
+    }
+  });
+
+  it("marks a hash-search hit that is not on HEAD", async () => {
+    const rows = await readRecentCommits(repo.root, 100, ALL_REFS, undefined, korean.slice(0, 8));
+    assert.strictEqual(rows[0]?.hash, korean);
+    assert.ok((await readOffHeadHashes(repo.root, ALL_REFS, 1000))?.has(korean));
+  });
+
+  it("dims relative to a linked worktree's own HEAD", async () => {
+    const wt = `${repo.root}-wt`;
+    repo.git("worktree", "add", "-q", wt, "기능/검색");
+    try {
+      const off = await readOffHeadHashes(wt, ALL_REFS, 1000);
+      assert.ok(off && !off.has(korean), "the worktree's branch is its HEAD, so not dimmed");
+      assert.ok(off.has(dup));
+      assert.ok((await readRecentCommits(wt, 100, ALL_REFS)).some((r) => r.hash === korean));
+    } finally {
+      repo.git("worktree", "remove", "--force", wt);
+    }
+  });
+});
+
+describe("all-branches view in a repository with no commits", function () {
+  this.timeout(30_000);
+  let repo: TempRepo;
+  before(() => { repo = new TempRepo(); });
+  after(() => repo.dispose());
+
+  it("dims nothing and does not throw from the off-HEAD lookup", async () => {
+    assert.strictEqual(await readOffHeadHashes(repo.root, ALL_REFS, 1000), undefined);
+  });
+
+  it("returns an empty log for both views instead of a git error", async () => {
+    assert.deepStrictEqual(await readRecentCommits(repo.root, 100), []);
+    assert.deepStrictEqual(await readRecentCommits(repo.root, 100, ALL_REFS), []);
+    assert.deepStrictEqual(await readRecentCommits(repo.root, 100, undefined, undefined, "abc1234"), []);
+  });
+});
+
+describe("orphan branch (unborn HEAD next to real branches)", function () {
+  this.timeout(30_000);
+  let repo: TempRepo;
+  let first: string;
+  before(() => {
+    repo = new TempRepo();
+    first = repo.commitEmpty("first");
+    repo.git("checkout", "-q", "--orphan", "fresh");
+  });
+  after(() => repo.dispose());
+
+  it("shows an empty HEAD log, and the other branches under All branches", async () => {
+    assert.deepStrictEqual(await readRecentCommits(repo.root, 100), []);
+    const all = await readRecentCommits(repo.root, 100, ALL_REFS);
+    assert.deepStrictEqual(all.map((r) => r.hash), [first]);
+  });
+
+  it("dims nothing it cannot compare against", async () => {
+    assert.strictEqual(await readOffHeadHashes(repo.root, ALL_REFS, 1000), undefined);
   });
 });
 

@@ -159,6 +159,11 @@
         sizeRow(row, graphWidth);
         if (c.hash === S.currentHash) row.classList.add("gv-unified-row--selected");
         if (S.markedHash && c.hash === S.markedHash) row.classList.add("gv-unified-row--marked");
+        if (c.offHead) {
+          // Dimming is visual only; screen readers get the same fact as a description.
+          row.classList.add("gv-unified-row--offhead");
+          row.setAttribute("aria-description", UI.commitNotOnHead || "Not on the current branch");
+        }
         row.appendChild(buildCommitCell(c, u.laneColor(lane)));
         row.addEventListener("click", function () {
           Object.keys(rendered).forEach(function (k) { rendered[k].classList.remove("gv-unified-row--selected"); });

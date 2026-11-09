@@ -8,6 +8,8 @@ import {
   readCurrentBranchName,
   readFirstParent,
   readRecentCommits,
+  readOffHeadHashes,
+  ALL_REFS,
   readStashes,
   readStashFiles,
   readSyncState,
@@ -58,6 +60,8 @@ function readFileViewPref(): "list" | "tree" {
 }
 /** Upper bound for one graph request — the webview pages up to this in steps as you scroll. */
 const MAX_GRAPH_COMMITS = 5000;
+/** Most commits looked up as "not on HEAD"; beyond that, older off-HEAD commits are just not dimmed. */
+const OFF_HEAD_CAP = 20000;
 
 /**
  * The repo the panel should act on: the user's picked repo when it is still
@@ -293,15 +297,16 @@ async function sendGraphPayload(
     // it can surface a notice and clear the stale selection — rather than
     // failing the whole view with git's "unknown revision" fatal error.
     let revMissing: string | undefined;
-    if (logRev && !(await revExists(root, logRev))) {
+    if (logRev && logRev !== ALL_REFS && !(await revExists(root, logRev))) {
       revMissing = logRev;
       logRev = undefined;
     }
     const pf = typeof pathFilter === "string" && pathFilter.trim().length > 0 ? pathFilter.trim() : undefined;
     const q = typeof query === "string" && query.trim().length > 0 ? query.trim() : undefined;
     const branch = await readCurrentBranchName(root);
-    const [commits, branchTree, working, stashes, rebaseInProgress, sync, repos] = await Promise.all([
+    const [commits, offHead, branchTree, working, stashes, rebaseInProgress, sync, repos] = await Promise.all([
       readRecentCommits(root, capped, logRev, pf, q, mergesMode),
+      readOffHeadHashes(root, logRev, OFF_HEAD_CAP),
       readBranchTreePayload(root),
       readWorkingState(root).catch(() => ({ staged: 0, modified: 0, untracked: 0, conflicted: 0 })),
       readStashes(root).catch(() => []),
@@ -309,6 +314,7 @@ async function sendGraphPayload(
       readSyncState(root).catch(() => ({ upstream: null, ahead: 0, behind: 0 })),
       listRepoRoots().catch(() => [root]),
     ]);
+    if (offHead) for (const c of commits) if (offHead.has(c.hash)) c.offHead = true;
     webview.postMessage({
       type: "graphPayload",
       payload: {
