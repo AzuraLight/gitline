@@ -12,9 +12,26 @@
   var PAGE = 200;
   var saved = vscode.getState() || {};
   function savedString(key) { return typeof saved[key] === "string" ? saved[key] : ""; }
+  function stringList(v) { return Array.isArray(v) ? v.filter(function (s) { return typeof s === "string" && s; }) : null; }
+
+  /**
+   * The view to open with: the host's setting when the user set one, otherwise what this webview
+   * saved last time — including the pre-1.5 single `selectedRev`.
+   */
+  function openingRevs() {
+    var fromSettings = stringList((window.__GV_PREFS__ || {}).openingRevs);
+    if (fromSettings) return fromSettings;
+    var savedList = stringList(saved.selectedRevs);
+    if (savedList) return savedList;
+    var legacy = savedString("selectedRev");
+    return legacy ? [legacy] : [];
+  }
 
   var S = {
-    selectedRev: savedString("selectedRev"),
+    // [] = HEAD's log, [GV.ALL_REFS] = all branches, otherwise branch names / patterns.
+    selectedRevs: openingRevs(),
+    viewRefs: [],      // full refs the host resolved for a multi-branch / pattern selection
+    currentBranch: "", // checked-out branch, for Ctrl/Cmd+click starting from HEAD's log
     pathFilter: savedString("pathFilter"),
     query: savedString("query"),
     mergesMode: saved.mergesMode === "hide" || saved.mergesMode === "only" ? saved.mergesMode : "all",
@@ -31,7 +48,7 @@
 
   function saveState() {
     vscode.setState({
-      selectedRev: S.selectedRev,
+      selectedRevs: S.selectedRevs,
       pathFilter: S.pathFilter,
       query: S.query,
       mergesMode: S.mergesMode,
@@ -49,7 +66,7 @@
   function requestGraph(keepLimit) {
     if (!keepLimit) S.limit = PAGE;
     var msg = { limit: S.limit };
-    if (S.selectedRev) msg.rev = S.selectedRev;
+    if (S.selectedRevs.length) msg.revs = S.selectedRevs.slice();
     if (S.pathFilter) msg.pathFilter = S.pathFilter;
     if (S.query) msg.query = S.query;
     if (S.mergesMode !== "all") msg.mergesMode = S.mergesMode;
@@ -98,8 +115,11 @@
     commitList.refreshMarks();
   }
 
-  function showRevNotice(missingRev) {
-    var tmpl = UI.revMissingNotice || "“{0}” no longer exists — showing the default history instead.";
+  /** isList: several names / patterns matched nothing (vs. one clicked branch that was deleted). */
+  function showRevNotice(missingRev, isList) {
+    var tmpl = isList
+      ? UI.revNoMatchNotice || "No branch matches {0} in this repository — showing the default history instead."
+      : UI.revMissingNotice || "“{0}” no longer exists — showing the default history instead.";
     $("rev-notice-text").textContent = tmpl.replace("{0}", missingRev);
     u.setHidden($("rev-notice"), false);
   }
@@ -124,7 +144,18 @@
 
   // ---- Repo header & picker ---------------------------------------------------------------
 
-  function setRepoHeader(repoAbsPath, branch, viewRev) {
+  /** Header text after the repo name, and the tooltip that lists a multi-branch selection. */
+  function viewSuffix(branch, viewRev, viewRefs) {
+    var names = viewRefs.map(GV.shortRefName);
+    if (names.length > 1) {
+      return { text: (UI.headerBranchCount || "{0} branches").replace("{0}", String(names.length)), list: names.join("\n") };
+    }
+    if (names.length === 1) return { text: names[0], list: "" };
+    if (viewRev === GV.ALL_REFS) return { text: UI.branchAllRow || "All branches", list: "" };
+    return { text: viewRev || branch || "", list: "" };
+  }
+
+  function setRepoHeader(repoAbsPath, branch, viewRev, viewRefs) {
     var badge = $("repo-path");
     var full = $("repo-full");
     if (!repoAbsPath) {
@@ -134,11 +165,11 @@
       full.hidden = true;
       return;
     }
-    var suffix = viewRev === GV.ALL_REFS ? (UI.branchAllRow || "All branches") : (viewRev || branch || "");
-    var line = u.baseName(repoAbsPath) + (suffix ? " · " + suffix : "");
+    var suffix = viewSuffix(branch, viewRev, viewRefs || []);
+    var line = u.baseName(repoAbsPath) + (suffix.text ? " · " + suffix.text : "");
     var multi = S.repoList.length > 1;
     badge.textContent = multi ? line + " ▾" : line;
-    badge.title = repoAbsPath;
+    badge.title = repoAbsPath + (suffix.list ? "\n\n" + suffix.list : "");
     badge.classList.toggle("gv-repo-badge--picker", multi);
     // The full path lives in the badge tooltip; a separate path row cost a whole header line.
     full.textContent = repoAbsPath;
@@ -211,20 +242,25 @@
     post("requestCompareFiles", { a: S.markedHash, b: hash });
   };
   app.actions.startRebase = rebaseEditor.start;
+  app.actions.saveViewAsDefault = function () { post("saveViewAsDefault", {}); };
 
   // ---- Rendering the host's payload ---------------------------------------------------------
 
-  /** The selected rev no longer resolves; the host fell back to the default log. Drop it and say so. */
-  function applyRevMissing(missing) {
+  /** The selection no longer resolves; the host fell back to the default log. Drop it and say so. */
+  /**
+   * drop: the host says the selection is gone for good (a clicked branch was deleted). Only honoured
+   * when this reply answers the selection still on screen — a slow reply must not wipe a newer click.
+   */
+  function applyRevMissing(missing, drop, isList, requested) {
     if (!missing) {
       hideRevNotice();
       return;
     }
-    if (S.selectedRev === missing) {
-      S.selectedRev = "";
+    if (drop && S.selectedRevs.length && JSON.stringify(requested) === JSON.stringify(S.selectedRevs)) {
+      S.selectedRevs = [];
       saveState();
     }
-    showRevNotice(missing);
+    showRevNotice(missing, isList);
   }
 
   function reopenCurrentCommit(commits) {
@@ -239,13 +275,18 @@
 
   function renderPayload(payload) {
     if (!payload) return;
-    applyRevMissing(payload.revMissing);
+    applyRevMissing(payload.revMissing, !!payload.dropSelection, !!payload.revMissingIsList,
+      Array.isArray(payload.requestedRevs) ? payload.requestedRevs : []);
+    // Full ref names a multi-branch / pattern selection resolved to — the sidebar marks them selected.
+    S.viewRefs = Array.isArray(payload.viewRefs) ? payload.viewRefs : [];
+    S.currentBranch = (payload.branchTree && payload.branchTree.current) || "";
     u.setHidden($("rebase-banner"), !payload.rebaseInProgress);
     u.setHidden($("branch-bar"), false);
     branchTree.render(payload.branchTree || { current: "", locals: [], remotes: [] });
     S.repoList = Array.isArray(payload.repos) ? payload.repos : [];
     S.selectedRepo = payload.selectedRepo || payload.repoRoot || "";
-    setRepoHeader(payload.repoRoot || "", payload.branch || "", payload.viewRev || "");
+    setRepoHeader(payload.repoRoot || "", payload.branch || "", payload.viewRev || "",
+      Array.isArray(payload.viewRefs) ? payload.viewRefs : []);
     renderSync(payload.sync);
 
     var commits = payload.commits || [];
@@ -268,7 +309,7 @@
     u.setHidden($("branch-bar"), true);
     if (code === "no-repo") showEmptyCard(UI.emptyNoRepoTitle || "", UI.emptyNoRepoBody || "");
     else showEmptyCard(UI.emptyErrorTitle || "", message || UI.errorGeneric || "");
-    setRepoHeader("", "", "");
+    setRepoHeader("", "", "", []);
   }
 
   // ---- Host → webview messages ------------------------------------------------------------
@@ -291,12 +332,18 @@
     // "Open in Gitline graph" from inline blame: search for the SHA and open that commit.
     revealCommit: function (d) {
       if (typeof d.hash !== "string" || !d.hash) return;
-      S.selectedRev = "";
+      S.selectedRevs = [];
       S.pathFilter = "";
       applyPathFilter();
       searchInput.value = d.hash.slice(0, 12);
       setQuery(searchInput.value);
       S.currentHash = d.hash; // the row renders selected and reopenCurrentCommit opens it
+      commitFilterChange();
+    },
+    // The default-view settings changed while the panel is open.
+    applyView: function (d) {
+      S.selectedRevs = stringList(d.revs) || [];
+      hideRevNotice();
       commitFilterChange();
     },
     setPathFilter: function (d) {

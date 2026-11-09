@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.5.0
+
+### Added
+
+- **Default view setting** (#1). `gitline.graph.defaultView` opens the graph on the
+  current branch (`current`), every branch (`all`), or a chosen set (`selected`) listed
+  in `gitline.graph.defaultBranches` — names (`main`, `origin/main`, tags) and patterns
+  where `*` matches within one path segment (`origin/team/*`). It applies when the
+  panel is created (window start or reload) and when the setting changes; a view you
+  pick in the sidebar stays for the session. Leaving the setting unset keeps the old
+  behaviour of reopening the last view you used.
+- **Pick several branches.** Ctrl/Cmd+click (or Ctrl/Cmd+Enter) in the sidebar adds a
+  branch to the view or takes it out — starting from the current branch when you were on
+  *HEAD (default log)*. Branches matched by a pattern show as selected, and Ctrl/Cmd+click
+  takes one of them out. If a selection matches nothing in a repository (say, after
+  switching repos), Gitline shows the default history with a notice but keeps the
+  selection for when you switch back.
+  The header reads `repo · N branches`, with the list in its tooltip. Commits not on
+  the current branch are dimmed as in *All branches*. Selections are passed to git on
+  stdin, so hundreds of branches work on Windows too.
+- **Gitline: Save Current View as Default** — in the command palette and the branch
+  context menu; writes the two settings to workspace settings.
+
+### Changed
+
+- When a selection matches no branch in the repository, the notice now says so
+  ("No branch matches …") instead of "no longer exists".
+- The sidebar keeps keyboard focus and the remote folders you opened when the graph
+  refreshes (it used to rebuild with focus lost and remote folders collapsed).
+
+### Fixed
+
+- **32 messages were never translated** — interactive rebase, compare and the merge
+  filters showed English in the Korean UI since 1.0.1. Every message now has an entry in
+  both language bundles, and a test checks that new ones do too.
+
 ## 1.4.0
 
 ### Added

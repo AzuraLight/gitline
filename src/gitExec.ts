@@ -11,13 +11,15 @@ import type {
   GitSyncState,
   GitWorkingState,
 } from "./types";
+import { ALL_REFS } from "./viewSelection";
 
 const execFileAsync = promisify(execFile);
 
 /** Network operations (pull/push/fetch) give up after this long instead of hanging the panel. */
 export const NETWORK_TIMEOUT_MS = 120_000;
 
-type ExecOptions = { maxBuffer?: number; timeoutMs?: number };
+/** input: written to git's stdin (e.g. revisions for `--stdin`, which has no command-line length limit). */
+type ExecOptions = { maxBuffer?: number; timeoutMs?: number; input?: string };
 
 /**
  * Every git invocation goes through here, with explicit argv (no shell).
@@ -27,13 +29,19 @@ type ExecOptions = { maxBuffer?: number; timeoutMs?: number };
  */
 async function execGit(cwd: string, args: string[], options: ExecOptions = {}): Promise<string> {
   try {
-    const { stdout } = await execFileAsync("git", ["-c", "core.quotePath=false", ...args], {
+    const run = execFileAsync("git", ["-c", "core.quotePath=false", ...args], {
       cwd,
       maxBuffer: options.maxBuffer ?? 10 * 1024 * 1024,
       timeout: options.timeoutMs ?? 0,
       encoding: "utf8",
       env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
     });
+    // Always close stdin: a command that does not read it must not wait on an open pipe. If git
+    // exits before reading a large input the write fails with EPIPE; the exit status already
+    // reports the failure, so the stream error must not become an uncaught exception.
+    run.child.stdin?.on("error", () => undefined);
+    run.child.stdin?.end(options.input ?? "");
+    const { stdout } = await run;
     return typeof stdout === "string" ? stdout : String(stdout);
   } catch (err: unknown) {
     const e = err as NodeJS.ErrnoException & { stderr?: Buffer | string; killed?: boolean; signal?: string };
@@ -108,9 +116,9 @@ export async function runGitNetworkCommand(cwd: string, args: string[]): Promise
 }
 
 /** Runs `git` and resolves to null instead of throwing — for probes where failure is an answer. */
-async function tryGit(cwd: string, args: string[]): Promise<string | null> {
+async function tryGit(cwd: string, args: string[], input?: string): Promise<string | null> {
   try {
-    return await execGit(cwd, args, { maxBuffer: 4 * 1024 * 1024 });
+    return await execGit(cwd, args, { maxBuffer: 4 * 1024 * 1024, input });
   } catch {
     return null;
   }
@@ -281,11 +289,11 @@ export function looksLikeHash(query: string): boolean {
 }
 
 /**
- * View id for "every branch": local and remote branches, tags and HEAD (so a detached HEAD
- * shows too). Not `--all`, which would also pull in stash internals as graph nodes.
+ * ALL_REFS is the view id for "every branch": local and remote branches, tags and HEAD (so a
+ * detached HEAD shows too). Not `--all`, which would also pull in stash internals as graph nodes.
  * `:` cannot appear in a ref name, so this never collides with a real branch.
  */
-export const ALL_REFS = ":all";
+export { ALL_REFS };
 
 function revArgs(rev: string, headBorn = true): string[] {
   if (rev !== ALL_REFS) return [rev];
@@ -295,15 +303,86 @@ function revArgs(rev: string, headBorn = true): string[] {
 }
 
 /**
+ * What a graph view logs: one rev as typed (a branch name, `:all`), or a list of full ref names
+ * (`refs/heads/x`) from {@link resolveRefSelection}. A list goes to git on stdin (`--stdin`), so
+ * hundreds of branches never hit the Windows command-line limit.
+ */
+export type ViewRev = string | string[];
+
+function viewRevInput(rev: string[]): string {
+  return rev.join("\n") + "\n";
+}
+
+const REF_ROOTS = ["refs/heads/", "refs/remotes/", "refs/tags/"];
+
+/** `*` matches within one path segment, as git's own ref patterns do (`origin/team/*` ≠ `origin/team/a/b`). */
+function refPattern(pattern: string): RegExp {
+  const body = pattern.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*");
+  return new RegExp(`^${body}$`);
+}
+
+/**
+ * Turns names and `*` patterns (local `main`, remote `origin/x`, tags, `origin/team/*`) into the full
+ * ref names that exist now. A name or pattern is tried under refs/heads, refs/remotes and refs/tags,
+ * so no remote list is needed. A name that is no ref but still a revision git knows (`refs/heads/x`,
+ * a SHA, `HEAD`, `main~3`) is kept as written, so an entry means the same alone as in a list.
+ * `missing` holds the entries that matched nothing. Throws when the refs cannot be listed at all,
+ * so a failing git is never mistaken for "these branches are gone".
+ */
+export async function resolveRefSelection(cwd: string, wanted: string[]): Promise<{ refs: string[]; missing: string[] }> {
+  const out = await execGit(cwd, ["for-each-ref", "--format=%(refname)", ...REF_ROOTS.map((r) => r.slice(0, -1))]);
+  const all = out.split("\n").map((s) => s.trim()).filter(Boolean);
+  const refs: string[] = [];
+  const seen = new Set<string>();
+  const add = (r: string) => {
+    if (!seen.has(r)) {
+      seen.add(r);
+      refs.push(r);
+    }
+  };
+  const missing: string[] = [];
+  for (const raw of wanted) {
+    const w = raw.trim();
+    if (!w) continue;
+    // Revisions go to git on stdin, where a leading "-" would read as an option (`--not`, `--all`).
+    if (w.startsWith("-")) {
+      missing.push(w);
+      continue;
+    }
+    const re = w.includes("*") ? refPattern(w) : null;
+    const hits = all.filter((full) => {
+      const root = REF_ROOTS.find((r) => full.startsWith(r));
+      if (!root) return false;
+      const short = full.slice(root.length);
+      if (!re) return short === w || full === w;
+      // origin/HEAD only points at another remote branch; a pattern would list it twice.
+      if (root === "refs/remotes/" && short.endsWith("/HEAD")) return false;
+      return re.test(short);
+    });
+    if (hits.length === 0 && !re && (await revExists(cwd, w))) hits.push(w);
+    if (hits.length === 0) missing.push(w);
+    for (const h of hits) add(h);
+  }
+  return { refs, missing };
+}
+
+/**
  * Hashes reachable from `rev` but not from HEAD, at most `cap` of them. Undefined for HEAD's own
  * log (nothing to dim) or when it cannot be computed (unborn HEAD) — callers then dim nothing.
  */
-export async function readOffHeadHashes(cwd: string, rev: string | undefined, cap: number): Promise<Set<string> | undefined> {
-  const target = rev?.trim();
-  if (!target) return undefined;
+export async function readOffHeadHashes(cwd: string, rev: ViewRev | undefined, cap: number): Promise<Set<string> | undefined> {
   // --topo-order matches the graph's order, so at the cap it is the oldest rows that go undimmed.
   // The trailing "--" keeps a file named HEAD (or like a branch) from being read as a path.
-  const out = await tryGit(cwd, ["rev-list", "--topo-order", `--max-count=${cap}`, ...revArgs(target), "--not", "HEAD", "--"]);
+  const base = ["rev-list", "--topo-order", `--max-count=${cap}`];
+  let out: string | null;
+  if (Array.isArray(rev)) {
+    if (rev.length === 0) return undefined;
+    out = await tryGit(cwd, [...base, "--stdin", "--not", "HEAD", "--"], viewRevInput(rev));
+  } else {
+    const target = rev?.trim();
+    if (!target) return undefined;
+    out = await tryGit(cwd, [...base, ...revArgs(target), "--not", "HEAD", "--"]);
+  }
   if (out === null) return undefined;
   return new Set(out.split("\n").map((s) => s.trim()).filter(Boolean));
 }
@@ -311,14 +390,19 @@ export async function readOffHeadHashes(cwd: string, rev: string | undefined, ca
 export async function readRecentCommits(
   cwd: string,
   limit: number,
-  rev?: string,
+  rev?: ViewRev,
   pathFilter?: string,
   query?: string,
   mergesMode?: MergesMode,
 ): Promise<GitCommitRow[]> {
-  const target = rev?.trim();
   const logArgs = ["log"];
-  if (!target || target === ALL_REFS) {
+  let input: string | undefined;
+  const target = Array.isArray(rev) ? undefined : rev?.trim();
+  if (Array.isArray(rev)) {
+    if (rev.length === 0) return [];
+    logArgs.push("--stdin");
+    input = viewRevInput(rev);
+  } else if (!target || target === ALL_REFS) {
     // HEAD with no commits yet: HEAD's own log is empty rather than a git error card.
     const headBorn = await revExists(cwd, "HEAD");
     if (!target && !headBorn) return [];
@@ -351,7 +435,7 @@ export async function readRecentCommits(
     // stop with "ambiguous argument".
     logArgs.push("--");
   }
-  const rows = parseCommitRows(await execGit(cwd, logArgs));
+  const rows = parseCommitRows(await execGit(cwd, logArgs, { input }));
 
   // A hex query may be a commit hash — `--grep` only searches messages, so look the hash up
   // directly and put that commit first (deduplicated if its message also matched).

@@ -1,9 +1,11 @@
 import * as assert from "assert";
+import { execFileSync } from "child_process";
 import * as os from "os";
 import {
   ALL_REFS,
   looksLikeHash,
   readOffHeadHashes,
+  resolveRefSelection,
   parseChangedFiles,
   readBlobAt,
   readCommitFiles,
@@ -392,6 +394,146 @@ describe("all-branches view: names, worktrees and searches", function () {
       assert.ok((await readRecentCommits(wt, 100, ALL_REFS)).some((r) => r.hash === korean));
     } finally {
       repo.git("worktree", "remove", "--force", wt);
+    }
+  });
+});
+
+describe("selected branches view", function () {
+  this.timeout(60_000);
+  let repo: TempRepo;
+  let base: string, a: string, b: string, deep: string, remoteC: string;
+
+  before(() => {
+    repo = new TempRepo();
+    base = repo.commitEmpty("base");
+    repo.git("checkout", "-q", "-b", "team/a");
+    a = repo.commitEmpty("a work");
+    repo.git("checkout", "-q", "-b", "team/b", base);
+    b = repo.commitEmpty("b work");
+    repo.git("checkout", "-q", "-b", "team/deep/x", base);
+    deep = repo.commitEmpty("deep work");
+    repo.git("checkout", "-q", "-b", "tmp-c", base);
+    remoteC = repo.commitEmpty("remote c work");
+    repo.git("update-ref", "refs/remotes/origin/team/c", remoteC);
+    repo.git("checkout", "-q", "main");
+    repo.git("branch", "-q", "-D", "tmp-c");
+    repo.git("tag", "v1", base);
+    repo.write("team", "a file named like a branch prefix\n");
+  });
+
+  after(() => repo.dispose());
+
+  it("resolves names, remote names and tags to full refs", async () => {
+    const r = await resolveRefSelection(repo.root, ["main", "origin/team/c", "v1"]);
+    assert.deepStrictEqual(r, { refs: ["refs/heads/main", "refs/remotes/origin/team/c", "refs/tags/v1"], missing: [] });
+  });
+
+  it("matches * within one segment, across local and remote", async () => {
+    const local = await resolveRefSelection(repo.root, ["team/*"]);
+    assert.deepStrictEqual(local.refs.sort(), ["refs/heads/team/a", "refs/heads/team/b"]);
+    const remote = await resolveRefSelection(repo.root, ["origin/team/*"]);
+    assert.deepStrictEqual(remote.refs, ["refs/remotes/origin/team/c"]);
+    const nested = await resolveRefSelection(repo.root, ["team/*/x"]);
+    assert.deepStrictEqual(nested.refs, ["refs/heads/team/deep/x"]);
+  });
+
+  it("does not treat a plain name as a prefix, and reports what matched nothing", async () => {
+    const r = await resolveRefSelection(repo.root, ["team", "nope/*", "gone", "main", "main", " "]);
+    assert.deepStrictEqual(r, { refs: ["refs/heads/main"], missing: ["team", "nope/*", "gone"] });
+  });
+
+  it("logs and dims exactly the chosen refs", async () => {
+    const { refs } = await resolveRefSelection(repo.root, ["main", "team/*"]);
+    const rows = await readRecentCommits(repo.root, 100, refs);
+    assert.deepStrictEqual(rows.map((r) => r.hash).sort(), [a, b, base].sort());
+    const off = await readOffHeadHashes(repo.root, refs, 1000);
+    assert.deepStrictEqual([...(off ?? [])].sort(), [a, b].sort());
+    assert.ok(!rows.some((r) => r.hash === deep || r.hash === remoteC));
+  });
+
+  it("keeps filters working with a list (search, merges, file history)", async () => {
+    const { refs } = await resolveRefSelection(repo.root, ["team/*"]);
+    assert.deepStrictEqual((await readRecentCommits(repo.root, 100, refs, undefined, "b work")).map((r) => r.hash), [b]);
+    assert.deepStrictEqual(await readRecentCommits(repo.root, 100, refs, undefined, undefined, "only"), []);
+    assert.deepStrictEqual(await readRecentCommits(repo.root, 100, refs, "no-such-file.txt"), []);
+  });
+
+  it("returns nothing for an empty list instead of falling back to HEAD", async () => {
+    assert.deepStrictEqual(await readRecentCommits(repo.root, 100, []), []);
+    assert.strictEqual(await readOffHeadHashes(repo.root, [], 1000), undefined);
+  });
+
+  it("passes hundreds of branches through stdin", async () => {
+    const many = Array.from({ length: 600 }, (_, i) => `bulk/branch-with-a-long-descriptive-name-${i}`);
+    const stream = many.map((n) => `create refs/heads/${n} ${a}`).join("\n") + "\n";
+    execFileSync("git", ["update-ref", "--stdin"], { cwd: repo.root, input: stream });
+    const { refs, missing } = await resolveRefSelection(repo.root, ["bulk/*", "main"]);
+    assert.strictEqual(refs.length, 601);
+    assert.deepStrictEqual(missing, []);
+    assert.ok(refs.join(" ").length > 32_768, "longer than the Windows command line");
+    const rows = await readRecentCommits(repo.root, 100, refs);
+    assert.deepStrictEqual(rows.map((r) => r.hash).sort(), [a, base].sort());
+    assert.deepStrictEqual([...((await readOffHeadHashes(repo.root, refs, 1000)) ?? [])], [a]);
+  });
+});
+
+describe("selected branches view: edge cases", function () {
+  this.timeout(60_000);
+  let repo: TempRepo;
+  let base: string, dotted: string, dupBranch: string;
+
+  before(() => {
+    repo = new TempRepo();
+    base = repo.commitEmpty("base");
+    repo.git("checkout", "-q", "-b", "fix/v1.2+hot");
+    dotted = repo.commitEmpty("dotted work");
+    repo.git("checkout", "-q", "-b", "fix/v1x2", base);
+    repo.commitEmpty("look-alike work");
+    repo.git("checkout", "-q", "-b", "dup", base);
+    dupBranch = repo.commitEmpty("dup branch work");
+    repo.git("tag", "dup", base);
+    repo.git("checkout", "-q", "main");
+    repo.git("update-ref", "refs/remotes/origin/main", base);
+    repo.git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+    repo.write("dup", "a file named like the selected branch\n");
+  });
+
+  after(() => repo.dispose());
+
+  it("treats regex characters in names and patterns literally", async () => {
+    assert.deepStrictEqual((await resolveRefSelection(repo.root, ["fix/v1.2*"])).refs, ["refs/heads/fix/v1.2+hot"]);
+    assert.deepStrictEqual((await resolveRefSelection(repo.root, ["fix/v1.2+hot"])).refs, ["refs/heads/fix/v1.2+hot"]);
+    assert.deepStrictEqual((await resolveRefSelection(repo.root, ["fix/v1?2"])).missing, ["fix/v1?2"]);
+  });
+
+  it("leaves a remote's symbolic HEAD out of pattern matches", async () => {
+    const r = await resolveRefSelection(repo.root, ["origin/*"]);
+    assert.deepStrictEqual(r.refs, ["refs/remotes/origin/main"]);
+  });
+
+  it("shows both when a branch and a tag share the name", async () => {
+    const { refs } = await resolveRefSelection(repo.root, ["dup"]);
+    assert.deepStrictEqual(refs.sort(), ["refs/heads/dup", "refs/tags/dup"]);
+    const rows = await readRecentCommits(repo.root, 100, refs);
+    assert.ok(rows.some((r) => r.hash === dupBranch) && rows.some((r) => r.hash === base));
+  });
+
+  it("is not confused by a file named like a selected branch", async () => {
+    const { refs } = await resolveRefSelection(repo.root, ["dup", "fix/*"]);
+    const rows = await readRecentCommits(repo.root, 100, refs);
+    assert.ok(rows.some((r) => r.hash === dotted));
+    assert.ok((await readOffHeadHashes(repo.root, refs, 100))?.has(dupBranch));
+  });
+
+  it("lists other branches but dims nothing when HEAD has no commits yet", async () => {
+    repo.git("checkout", "-q", "--orphan", "empty-start");
+    try {
+      const { refs } = await resolveRefSelection(repo.root, ["fix/*"]);
+      assert.strictEqual(refs.length, 2);
+      assert.ok((await readRecentCommits(repo.root, 100, refs)).some((r) => r.hash === dotted));
+      assert.strictEqual(await readOffHeadHashes(repo.root, refs, 100), undefined);
+    } finally {
+      repo.git("checkout", "-q", "-f", "main");
     }
   });
 });

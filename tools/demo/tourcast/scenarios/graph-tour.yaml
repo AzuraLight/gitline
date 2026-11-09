@@ -1,4 +1,5 @@
-# README GIF 1 — browse history: a merge, a branch's own history, back to HEAD, all branches, scroll.
+# README GIF 1 — browse history: a merge, a branch's own history, back to HEAD, all branches,
+# several branches, scroll.
 #   node tools/demo/build.js list
 #   tourcast record tools/demo/tourcast/scenarios/graph-tour.yaml -o out-demo/graph-tour.mp4
 version: 1
@@ -49,6 +50,19 @@ steps:
     caption: All branches — commits not on HEAD are dimmed
     spotlight: true
   - wait_ready: all_view
+    hold: 1.8
+
+  # Several branches: a click picks one, Ctrl/Cmd+click (here Tab + Cmd+Enter, the keyboard
+  # twin, since the cursor cannot show a held modifier) adds the next.
+  - click: branch.search
+    caption: Pick several branches
+  - wait_ready: search_view
+    hold: 0.6
+  - press: Tab
+    hold: 0.3
+  - press: Meta+Enter
+    caption: Ctrl/Cmd+click or Ctrl/Cmd+Enter adds a branch
+  - wait_ready: multi_view
     hold: 1.8
 
   - scroll: { to: bottom, in: graph.canvas, duration: 2.0, easing: out_quad }

@@ -128,16 +128,43 @@
     setTimeout(function () { window.postMessage(msg, "*"); }, 40);
   }
 
+  var BRANCH_NAMES = ["main", "feature/search", "feature/checkout", "fix/cart-total", "origin/main", "origin/feature/search"];
+
   function graphPayload(req) {
-    // Same views as the extension: HEAD's own log, one branch, or every branch (":all"); outside
-    // HEAD's log, commits HEAD cannot reach carry offHead so the webview dims them.
-    var rev = req.rev || "";
+    // Same views as the extension: HEAD's own log, every branch (":all"), one branch, or several
+    // names / `*` patterns (one path segment). Outside HEAD's log, commits HEAD cannot reach carry
+    // offHead so the webview dims them.
+    var revs = Array.isArray(req.revs) ? req.revs : req.rev ? [req.rev] : [];
     var onHead = {};
     reachableFrom(tips.main).forEach(function (c) { onHead[c.hash] = true; });
-    var list = rev === ":all" ? commits
-      : rev ? reachableFrom(tips[rev] || tips[rev.replace(/^origin\//, "")])
-      : reachableFrom(tips.main);
-    if (rev) {
+    var list, viewRev = "", viewRefs = [], revMissing = "";
+    if (revs.indexOf(":all") >= 0) {
+      list = commits;
+      viewRev = ":all";
+    } else if (revs.length) {
+      var names = BRANCH_NAMES.filter(function (n) {
+        return revs.some(function (r) {
+          if (r.indexOf("*") < 0) return r === n;
+          return new RegExp("^" + r.split("*").map(function (s) { return s.replace(/[.+?^${}()|[\]\\]/g, "\\$&"); }).join("[^/]*") + "$").test(n);
+        });
+      });
+      var seen = {};
+      names.forEach(function (n) {
+        reachableFrom(tips[n] || tips[n.replace(/^origin\//, "")]).forEach(function (c) { seen[c.hash] = true; });
+      });
+      list = commits.filter(function (c) { return seen[c.hash]; });
+      if (!names.length) {
+        revMissing = revs.join(", ");
+        list = reachableFrom(tips.main);
+      } else if (revs.length === 1 && revs[0].indexOf("*") < 0) {
+        viewRev = revs[0];
+      } else {
+        viewRefs = names.map(function (n) { return (/^origin\//.test(n) ? "refs/remotes/" : "refs/heads/") + n; });
+      }
+    } else {
+      list = reachableFrom(tips.main);
+    }
+    if (revs.length && !revMissing) {
       list = list.map(function (c) {
         if (onHead[c.hash]) return c;
         var copy = Object.assign({}, c);
@@ -153,7 +180,13 @@
       repos: ["/Users/demo/acme-shop", "/Users/demo/acme-admin"],
       selectedRepo: "/Users/demo/acme-shop",
       branch: "main",
-      viewRev: rev,
+      viewRev: viewRev,
+      viewRefs: viewRefs,
+      revMissing: revMissing,
+      requestedRevs: revs,
+      // As in the extension: a deleted single branch is dropped; a list that matches nothing is kept.
+      dropSelection: !!revMissing && revs.length === 1 && revs[0].indexOf("*") < 0,
+      revMissingIsList: !!revMissing && (revs.length > 1 || revs[0].indexOf("*") >= 0),
       branchTree: { current: "main", locals: ["main", "feature/search", "feature/checkout", "fix/cart-total"],
                     remotes: [{ remote: "origin", branches: ["origin/main", "origin/feature/search"] }] },
       stashes: [{ ref: "stash@{0}", subject: "WIP on main: try lazy image loading", parentShort: tips.main.slice(0, 7) }],
@@ -176,7 +209,8 @@
         window.SENT.push(m);
         if (HANDLERS[m.type]) HANDLERS[m.type](m);
       },
-      getState: function () { return null; },
+      // Lets a test page start from saved webview state (e.g. a pre-1.5 `selectedRev`).
+      getState: function () { return window.__GV_DEMO_STATE__ || null; },
       setState: function () {},
     };
   };

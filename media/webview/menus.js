@@ -79,6 +79,7 @@
         { label: "Force delete", danger: true, run: branchAction("branch-delete-force", name) },
         "-",
         { label: "Copy name", run: copy(name) },
+        { label: "Save current view as default", run: app.actions.saveViewAsDefault },
       ]));
     }
 
@@ -91,6 +92,7 @@
         { label: "Delete on remote", danger: true, run: branchAction("branch-delete-remote", name) },
         "-",
         { label: "Copy name", run: copy(name) },
+        { label: "Save current view as default", run: app.actions.saveViewAsDefault },
       ]);
     }
 

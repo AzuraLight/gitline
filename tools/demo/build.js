@@ -2,7 +2,7 @@
 // mock host, so it opens in any browser. Used to record README screenshots and GIFs.
 //
 //   npm run compile && node tools/demo/build.js [list|tree]
-//   python3 -m http.server 8790        # from the repo root
+//   python3 tools/demo/serve.py 8790   # from the repo root (not `-m http.server`: see serve.py)
 //   open http://localhost:8790/out-demo/index.html?theme=dark
 "use strict";
 const fs = require("fs");

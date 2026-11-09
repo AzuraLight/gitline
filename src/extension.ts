@@ -9,6 +9,7 @@ import {
   revealCommitPanelAndReload,
   revealCommitPanelWithPath,
   runSyncWithProgress,
+  saveCurrentViewAsDefault,
   type SyncOp,
 } from "./panelWebview";
 
@@ -18,6 +19,9 @@ export type GitlineExports = { inlineBlameText(): string | undefined };
 export function activate(context: vscode.ExtensionContext): GitlineExports {
   context.subscriptions.push(registerCommitShowProvider());
   context.subscriptions.push(registerGitlinePanelWebview(context));
+  context.subscriptions.push(
+    vscode.commands.registerCommand("gitline.saveViewAsDefault", () => saveCurrentViewAsDefault()),
+  );
 
   const openGraph = vscode.commands.registerCommand("gitline.openCommitGraph", async () => {
     try {

@@ -2,7 +2,8 @@ import * as vscode from "vscode";
 import type { CommitGraphWebviewUi } from "./nls";
 
 /** Per-workspace view preferences the webview needs before its first render. */
-export type CommitGraphPrefs = { fileView: "list" | "tree" };
+/** openingRevs: the view to open with (from settings), or null to restore the webview's own state. */
+export type CommitGraphPrefs = { fileView: "list" | "tree"; openingRevs?: string[] | null };
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");

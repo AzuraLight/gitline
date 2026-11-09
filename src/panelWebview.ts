@@ -9,7 +9,9 @@ import {
   readFirstParent,
   readRecentCommits,
   readOffHeadHashes,
+  resolveRefSelection,
   ALL_REFS,
+  type ViewRev,
   readStashes,
   readStashFiles,
   readSyncState,
@@ -17,6 +19,7 @@ import {
   revExists,
   type MergesMode,
 } from "./gitExec";
+import { classifyRevs, defaultViewForRevs, normalizeRevs, revsForDefaultView } from "./viewSelection";
 import {
   createBranchFrom,
   createTagAt,
@@ -62,6 +65,105 @@ function readFileViewPref(): "list" | "tree" {
 const MAX_GRAPH_COMMITS = 5000;
 /** Most commits looked up as "not on HEAD"; beyond that, older off-HEAD commits are just not dimmed. */
 const OFF_HEAD_CAP = 20000;
+
+/**
+ * The selection the latest graph reply showed — what "Save Current View as Default" stores. Null
+ * until the panel has loaded once. A branch that no longer exists is not in it (the view fell back).
+ */
+let shownRevs: string[] | null = null;
+/** Numbers graph requests so only the newest reply updates shownRevs (replies can finish out of order). */
+let graphRequestSeq = 0;
+
+const GRAPH_CONFIG = "gitline.graph";
+
+function configuredDefaultRevs(): string[] {
+  const config = vscode.workspace.getConfiguration(GRAPH_CONFIG);
+  return revsForDefaultView(config.get("defaultView"), config.get("defaultBranches"));
+}
+
+/** The default view in effect when the settings were last looked at; a change must differ from it. */
+let lastDefaultKey = "";
+/** True while our own save writes the settings, so its intermediate states are not applied. */
+let savingDefault = false;
+
+/**
+ * The selection a newly created panel opens with, or null to keep what the webview restored from
+ * its own state. Only a `defaultView` the user actually set (at any level) overrides it, so people
+ * who never touch the setting keep the old behaviour: the last view comes back after a restart.
+ */
+function readConfiguredOpeningRevs(): string[] | null {
+  const config = vscode.workspace.getConfiguration(GRAPH_CONFIG);
+  const inspected = config.inspect<string>("defaultView");
+  const set =
+    inspected?.globalValue !== undefined ||
+    inspected?.workspaceValue !== undefined ||
+    inspected?.workspaceFolderValue !== undefined;
+  if (!set) return null;
+  return configuredDefaultRevs();
+}
+
+/** Writes the panel's current view as the default: workspace settings when a folder is open. */
+export async function saveCurrentViewAsDefault(): Promise<void> {
+  if (shownRevs === null) {
+    void vscode.window.showWarningMessage(
+      vscode.l10n.t("Open the Gitline panel and pick a view first, then save it as the default."),
+    );
+    return;
+  }
+  const saved = shownRevs;
+  const { view, branches } = defaultViewForRevs(saved);
+  const config = vscode.workspace.getConfiguration(GRAPH_CONFIG);
+  const target = vscode.workspace.workspaceFolders?.length
+    ? vscode.ConfigurationTarget.Workspace
+    : vscode.ConfigurationTarget.Global;
+  // Two writes: the change listener must not apply the half-written state in between. The branch
+  // list goes first and is left in place for "current" / "all", so switching back to "selected"
+  // later still has the user's list.
+  savingDefault = true;
+  try {
+    if (branches) await config.update("defaultBranches", branches, target);
+    await config.update("defaultView", view, target);
+  } finally {
+    savingDefault = false;
+    lastDefaultKey = JSON.stringify(configuredDefaultRevs());
+  }
+  // A higher-precedence value (e.g. workspace settings when saving to user settings) wins over
+  // what was written; say so instead of claiming success.
+  if (JSON.stringify(configuredDefaultRevs()) !== JSON.stringify(saved)) {
+    void vscode.window.showWarningMessage(
+      vscode.l10n.t("Saved, but another gitline.graph setting overrides it. Check your workspace settings."),
+    );
+    return;
+  }
+  const where =
+    target === vscode.ConfigurationTarget.Workspace
+      ? vscode.l10n.t("workspace settings")
+      : vscode.l10n.t("user settings");
+  const what =
+    view === "current"
+      ? vscode.l10n.t("the current branch")
+      : view === "all"
+        ? vscode.l10n.t("all branches")
+        : branches!.join(", ");
+  void vscode.window.showInformationMessage(
+    vscode.l10n.t("Gitline will open with {0} ({1}).", what, where),
+  );
+}
+
+/**
+ * Settings changed while the panel is open: switch to the new default view — but only when the
+ * default in effect really changed (an edit hidden by a higher-precedence value changes nothing),
+ * not while our own save is half-written, and not when it is already on screen.
+ */
+function applyGraphConfigChange(ev: vscode.ConfigurationChangeEvent): void {
+  if (!ev.affectsConfiguration(GRAPH_CONFIG) || savingDefault) return;
+  const revs = configuredDefaultRevs();
+  const key = JSON.stringify(revs);
+  if (key === lastDefaultKey) return;
+  lastDefaultKey = key;
+  if (!panelViewRef || key === JSON.stringify(shownRevs)) return;
+  void panelViewRef.webview.postMessage({ type: "applyView", revs });
+}
 
 /**
  * The repo the panel should act on: the user's picked repo when it is still
@@ -274,11 +376,12 @@ async function copyToClipboard(text: string): Promise<void> {
 async function sendGraphPayload(
   webview: vscode.Webview,
   limit: number,
-  rev?: string,
+  revs: string[],
   pathFilter?: string,
   query?: string,
   mergesMode?: MergesMode,
 ): Promise<void> {
+  const seq = ++graphRequestSeq;
   const root = await getActiveRepoRoot();
   if (!root) {
     webview.postMessage({
@@ -290,16 +393,33 @@ async function sendGraphPayload(
   }
   try {
     const capped = Math.min(MAX_GRAPH_COMMITS, Math.max(1, limit));
-    const trimmed = typeof rev === "string" ? rev.trim() : "";
-    let logRev = trimmed.length > 0 ? trimmed : undefined;
-    // If a rev was selected but no longer resolves (deleted/renamed remote
-    // branch, or a typo), fall back to the default log and tell the webview so
-    // it can surface a notice and clear the stale selection — rather than
-    // failing the whole view with git's "unknown revision" fatal error.
+    // If the selection no longer resolves, fall back to the default log and tell the webview so it
+    // can surface a notice — rather than failing the whole view with git's "unknown revision".
+    // - one clicked branch that was deleted/renamed: the stale selection is dropped (dropSelection);
+    // - a list / pattern that matches nothing in *this* repo (e.g. after switching repos): the
+    //   selection is kept, so switching back shows it again. In a list, entries that match nothing
+    //   are skipped quietly.
+    const sel = classifyRevs(revs);
+    let logRev: ViewRev | undefined;
+    let viewRefs: string[] = [];
     let revMissing: string | undefined;
-    if (logRev && logRev !== ALL_REFS && !(await revExists(root, logRev))) {
-      revMissing = logRev;
-      logRev = undefined;
+    let dropSelection = false;
+    if (sel.kind === "all") {
+      logRev = ALL_REFS;
+    } else if (sel.kind === "single") {
+      if (await revExists(root, sel.rev)) logRev = sel.rev;
+      else {
+        revMissing = sel.rev;
+        dropSelection = true;
+      }
+    } else if (sel.kind === "list") {
+      const { refs, missing } = await resolveRefSelection(root, sel.revs);
+      if (refs.length > 0) {
+        logRev = refs;
+        viewRefs = refs; // full names: the sidebar must tell branch "x" from tag "x"
+      } else {
+        revMissing = missing.join(", ");
+      }
     }
     const pf = typeof pathFilter === "string" && pathFilter.trim().length > 0 ? pathFilter.trim() : undefined;
     const q = typeof query === "string" && query.trim().length > 0 ? query.trim() : undefined;
@@ -315,6 +435,7 @@ async function sendGraphPayload(
       listRepoRoots().catch(() => [root]),
     ]);
     if (offHead) for (const c of commits) if (offHead.has(c.hash)) c.offHead = true;
+    if (seq === graphRequestSeq) shownRevs = dropSelection ? [] : revs;
     webview.postMessage({
       type: "graphPayload",
       payload: {
@@ -322,8 +443,14 @@ async function sendGraphPayload(
         repos,
         selectedRepo: root,
         branch,
-        viewRev: logRev ?? "",
+        // viewRev: "", ALL_REFS or the one clicked branch; a list is described by viewRefs instead.
+        viewRev: typeof logRev === "string" ? logRev : "",
+        viewRefs,
+        // The selection this reply answers: the webview ignores a stale reply's dropSelection.
+        requestedRevs: revs,
         revMissing: revMissing ?? "",
+        dropSelection,
+        revMissingIsList: revMissing !== undefined && sel.kind === "list",
         rebaseInProgress,
         sync,
         pathFilter: pf ?? "",
@@ -663,6 +790,7 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
       const htmlLang = getWebviewHtmlLang();
       webview.html = buildCommitGraphShellHtml(webview, context.extensionUri, ui, htmlLang, {
         fileView: readFileViewPref(),
+        openingRevs: readConfiguredOpeningRevs(),
       });
 
       webview.onDidReceiveMessage(
@@ -671,6 +799,7 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
           limit?: number;
           hash?: string;
           rev?: string;
+          revs?: unknown;
           action?: string;
           pathFilter?: string;
           query?: string;
@@ -703,9 +832,13 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
             void dispatchSyncOp(webview, msg.op);
             return;
           }
+          if (msg?.type === "saveViewAsDefault") {
+            void saveCurrentViewAsDefault();
+            return;
+          }
           if (msg?.type === "requestGraph") {
             const lim = typeof msg.limit === "number" ? msg.limit : 200;
-            const r = typeof msg.rev === "string" ? msg.rev : undefined;
+            const r = normalizeRevs(msg.revs, msg.rev);
             const pf = typeof msg.pathFilter === "string" ? msg.pathFilter : undefined;
             const q = typeof msg.query === "string" ? msg.query : undefined;
             const mm: MergesMode | undefined =
@@ -877,7 +1010,11 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
       });
     },
   };
-  return vscode.window.registerWebviewViewProvider("gitline.panel", provider, {
-    webviewOptions: { retainContextWhenHidden: true },
-  });
+  lastDefaultKey = JSON.stringify(configuredDefaultRevs());
+  return vscode.Disposable.from(
+    vscode.window.registerWebviewViewProvider("gitline.panel", provider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+    vscode.workspace.onDidChangeConfiguration(applyGraphConfigChange),
+  );
 }

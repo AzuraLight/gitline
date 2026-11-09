@@ -12,5 +12,11 @@
   "command.toggleInlineBlame.title": "Gitline: 인라인 Blame 켜기/끄기",
   "command.revealCommit.title": "Gitline: 그래프에서 커밋 보기",
   "command.openCommitPatch.title": "Gitline: 커밋 패치 열기",
-  "config.inlineBlame.enabled": "현재 줄을 마지막으로 바꾼 사람, 시점, 커밋 메시지를 줄 끝에 표시합니다. 기본값은 꺼짐입니다."
+  "config.inlineBlame.enabled": "현재 줄을 마지막으로 바꾼 사람, 시점, 커밋 메시지를 줄 끝에 표시합니다. 기본값은 꺼짐입니다.",
+  "command.saveViewAsDefault.title": "Gitline: 현재 보기를 기본값으로 저장",
+  "config.graph.defaultView": "그래프를 처음 열 때 보여줄 기록입니다. 패널이 새로 만들어질 때(창 시작·새로고침) 적용되며, 그 전까지는 사이드바에서 고른 보기가 유지됩니다. 설정하지 않으면 마지막으로 보던 보기가 다시 열립니다.",
+  "config.graph.defaultView.current": "현재 브랜치(HEAD).",
+  "config.graph.defaultView.all": "모든 로컬·원격 브랜치와 태그. 현재 브랜치에 없는 커밋은 흐리게 표시됩니다.",
+  "config.graph.defaultView.selected": "`#gitline.graph.defaultBranches#`에 적은 브랜치.",
+  "config.graph.defaultBranches": "`#gitline.graph.defaultView#`가 `selected`일 때 보여줄 브랜치입니다. 로컬(`main`), 원격(`origin/main`), 태그 이름이나, `*`가 경로 한 단계 안에서만 맞는 패턴(`origin/team/*`)을 쓸 수 있습니다. 저장소에 없는 이름은 건너뜁니다. 팁: 사이드바에서 Ctrl/Cmd+클릭으로 브랜치를 고른 뒤 **Gitline: 현재 보기를 기본값으로 저장**을 실행하세요."
 }

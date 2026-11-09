@@ -9,7 +9,7 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
   <img src="docs/images/graph-dark.png" alt="Gitline commit graph in the All branches view: branch sidebar, colored lanes with merges, an unmerged branch dimmed, and the changed files of the selected merge commit">
 </picture>
 
-![Opening a merge commit, showing one branch's history, switching to all branches with unmerged commits dimmed, then scrolling older history](docs/images/graph-tour.gif)
+![Opening a merge commit, showing one branch's history, switching to all branches with unmerged commits dimmed, adding a second branch to the view, then scrolling older history](docs/images/graph-tour.gif)
 
 ## Why Gitline
 
@@ -25,6 +25,8 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 - **SVG lane graph** — color-coded branches with smooth bezier merges.
 - **Ref chips** inline next to each commit: `HEAD`, local, remote, tag.
 - **All branches** — one graph of every local and remote branch and tag. Commits that are not on your current branch (not reachable from `HEAD`) are dimmed, so unmerged work stands out. Clicking a single branch dims the same way; **HEAD (default log)** shows just the current branch.
+- **Pick several branches** — <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+click (or <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Enter</kbd>) branches in the sidebar to show just those, e.g. your teammates' branches. The header reads `repo · 3 branches`; hover it for the list.
+- **Default view** — open Gitline on the current branch, all branches, or a list of branches and patterns such as `origin/team/*` (see [Settings](#settings)). Set it up by picking branches and running **Gitline: Save Current View as Default**.
 - **Search bar** — text, `@author`, or a full / partial SHA (the matching commit is listed first). 280 ms debounce, server-side `git log --grep` / `--author`.
 - **File-level history** — open the graph filtered to a single file (`--follow` for renames). Editor title bar button + explorer context menu.
 - **Auto-refresh** — `.git/HEAD`, `refs/**`, `index` watched. Commit, checkout, fetch, stage — graph reloads automatically.
@@ -96,12 +98,17 @@ For per-file history: right-click any file → **Gitline: File History**, or use
 | `Gitline: Push` | Push the current branch to its upstream (or publish to `origin`). |
 | `Gitline: Fetch All` | `git fetch --all --prune` on the active repo. |
 | `Gitline: Toggle Inline Blame` | Turns the current-line blame annotation on or off. |
+| `Gitline: Save Current View as Default` | Saves the graph's current view (current branch, all branches, or the branches you picked) as the default, in workspace settings. Also in the branch context menu. |
 
 ## Settings
 
 | Setting | Default | What it does |
 |---|---|---|
 | `gitline.inlineBlame.enabled` | `false` | Show who last changed the current line, when, and why — at the end of the line. |
+| `gitline.graph.defaultView` | `current` | What the graph opens with: `current` (the current branch), `all` (every branch and tag), or `selected` (the branches below). Applied when the panel is created — window start or reload; a view you pick in the sidebar stays until then. Leave it unset to reopen the last view you used. |
+| `gitline.graph.defaultBranches` | `[]` | For `selected`: branch, remote branch or tag names, and patterns where `*` matches within one path segment — `["main", "origin/team/*"]`. Names a repository doesn't have are skipped. |
+
+Both `gitline.graph.*` settings are window-scoped: set them in user or workspace settings (not per folder of a multi-root workspace).
 
 ## How it compares
 

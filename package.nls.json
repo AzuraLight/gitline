@@ -12,5 +12,11 @@
   "command.toggleInlineBlame.title": "Gitline: Toggle Inline Blame",
   "command.revealCommit.title": "Gitline: Show Commit in Graph",
   "command.openCommitPatch.title": "Gitline: Open Commit Patch",
-  "config.inlineBlame.enabled": "Show who last changed the current line, when, and why — at the end of the line. Off by default."
+  "config.inlineBlame.enabled": "Show who last changed the current line, when, and why — at the end of the line. Off by default.",
+  "command.saveViewAsDefault.title": "Gitline: Save Current View as Default",
+  "config.graph.defaultView": "Which history the graph opens with. Applies when the panel is created (window start or reload); a view you pick in the sidebar stays until then. Leave unset to reopen the last view you used.",
+  "config.graph.defaultView.current": "The current branch (HEAD).",
+  "config.graph.defaultView.all": "Every local and remote branch and tag. Commits not on the current branch are dimmed.",
+  "config.graph.defaultView.selected": "The branches listed in `#gitline.graph.defaultBranches#`.",
+  "config.graph.defaultBranches": "Branches for `#gitline.graph.defaultView#` = `selected`: local (`main`), remote (`origin/main`) or tag names, or patterns where `*` matches within one path segment (`origin/team/*`). Names that don't exist in a repository are skipped. Tip: Ctrl/Cmd+click branches in the sidebar, then run **Gitline: Save Current View as Default**."
 }

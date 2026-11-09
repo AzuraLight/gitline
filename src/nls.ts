@@ -16,6 +16,8 @@ export type CommitGraphWebviewUi = {
   branchHeadRow: string;
   branchAllRow: string;
   commitNotOnHead: string;
+  headerBranchCount: string;
+  branchMultiSelectHint: string;
   branchGroupLocal: string;
   branchGroupRemote: string;
   paneLogAria: string;
@@ -51,6 +53,7 @@ export type CommitGraphWebviewUi = {
   rebaseMoveUp: string;
   rebaseMoveDown: string;
   revMissingNotice: string;
+  revNoMatchNotice: string;
   dismissNoticeTitle: string;
   rebaseInProgressNotice: string;
   rebaseContinue: string;
@@ -80,6 +83,8 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     branchHeadRow: vscode.l10n.t("HEAD (default log)"),
     branchAllRow: vscode.l10n.t("All branches"),
     commitNotOnHead: vscode.l10n.t("Not on the current branch"),
+    headerBranchCount: vscode.l10n.t("{0} branches"),
+    branchMultiSelectHint: vscode.l10n.t("Ctrl/Cmd+click to add to the view"),
     branchGroupLocal: vscode.l10n.t("Local"),
     branchGroupRemote: vscode.l10n.t("Remote: {0}"),
     paneLogAria: vscode.l10n.t("Graph and commit list"),
@@ -117,6 +122,7 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     rebaseMoveUp: vscode.l10n.t("Move up"),
     rebaseMoveDown: vscode.l10n.t("Move down"),
     revMissingNotice: vscode.l10n.t("“{0}” no longer exists — showing the default history instead."),
+    revNoMatchNotice: vscode.l10n.t("No branch matches {0} in this repository — showing the default history instead."),
     dismissNoticeTitle: vscode.l10n.t("Dismiss"),
     rebaseInProgressNotice: vscode.l10n.t("A rebase is paused. Resolve conflicts in the SCM view, then continue."),
     rebaseContinue: vscode.l10n.t("Continue"),

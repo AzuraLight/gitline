@@ -1,5 +1,5 @@
 # tourcast profile for the Gitline demo page (tools/demo/build.js + mock-host.js).
-# Serve the repo root first:  python3 -m http.server 8790
+# Serve the repo root first:  python3 tools/demo/serve.py 8790
 version: 1
 name: gitline
 
@@ -44,6 +44,7 @@ ready:
   search_view: '.gv-ref-item__btn--selected[data-rev="feature/search"]'
   head_view: '.gv-ref-item__btn--head.gv-ref-item__btn--selected'
   all_view: '.gv-ref-item__btn--all.gv-ref-item__btn--selected'
+  multi_view: '.gv-ref-item__btn--selected[data-rev="feature/checkout"]'
   files: '#files-list .gv-file-row'
   tree: '#files-list.gv-detail-files--tree .gv-tree-folder'
   list: '#files-list:not(.gv-detail-files--tree) .gv-file-row'
