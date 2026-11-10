@@ -130,8 +130,8 @@ Both `gitline.graph.*` settings are window-scoped: set them in user or workspace
 ## Requirements
 
 - VS Code 1.85+
-- Git on `PATH`
-- The built-in `vscode.git` extension (bundled)
+- Git on `PATH` — in a Remote SSH, WSL or Dev Container window, on the remote side: Gitline runs there, next to your files.
+- The built-in Git extension is used when it is available (to list the same repositories as the Source Control view), but it is not required.
 
 ## Limitations
 

@@ -2,7 +2,7 @@
   "name": "gitline",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "publisher": "AzuraLight",
   "author": {
     "name": "AzuraLight"
@@ -30,10 +30,7 @@
     "stash"
   ],
   "extensionKind": [
-    "ui"
-  ],
-  "extensionDependencies": [
-    "vscode.git"
+    "workspace"
   ],
   "engines": {
     "vscode": "^1.85.0"
@@ -197,6 +194,7 @@
     "test:unit": "npm run compile:test && mocha --ui bdd \"out-test/test/unit/**/*.test.js\"",
     "test:integration": "npm run compile && npm run compile:test && vscode-test --label stable",
     "test:integration:minimum": "npm run compile && npm run compile:test && vscode-test --label minimum",
+    "test:integration:no-git-ext": "npm run compile && npm run compile:test && vscode-test --label no-git-ext",
     "test": "npm run test:unit && npm run test:integration",
     "package": "npm run compile && npx --yes @vscode/vsce@latest package"
   },

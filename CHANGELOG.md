@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.5.2
+
+### Fixed
+
+- **Gitline did not activate in Remote SSH windows** ("Cannot activate the 'Gitline'
+  extension because it depends on the 'Git' extension, which is not loaded"). Gitline was
+  declared a UI extension, so it ran on your local machine while the built-in Git extension —
+  and your repository — were on the remote. It now runs in the workspace (remote) extension
+  host, like Git Graph and GitLens, which also covers WSL and Dev Containers. The hard
+  dependency on the built-in Git extension is gone too: Gitline still uses its repository list
+  when it is there, and finds repositories through git itself when it is not.
+
+### Internal
+
+- Integration tests also run with the built-in Git extension disabled
+  (`npm run test:integration:no-git-ext`, and in CI on Linux).
+
 ## 1.5.1
 
 ### Changed

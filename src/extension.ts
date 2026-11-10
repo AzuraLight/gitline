@@ -15,7 +15,11 @@ import {
 } from "./panelWebview";
 
 /** What `activate` returns. Not a public API — the integration tests read it. */
-export type GitlineExports = { inlineBlameText(): string | undefined };
+export type GitlineExports = {
+  inlineBlameText(): string | undefined;
+  /** The repository the panel acts on right now (same lookup the graph uses). */
+  activeRepoRoot(): Promise<string | null>;
+};
 
 export function activate(context: vscode.ExtensionContext): GitlineExports {
   context.subscriptions.push(registerCommitShowProvider());
@@ -81,7 +85,7 @@ export function activate(context: vscode.ExtensionContext): GitlineExports {
 
   context.subscriptions.push(openGraph, openFileHistory, pull, push, fetchAllCmd);
   const blame = registerInlineBlame(context);
-  return { inlineBlameText: () => blame.lastAnnotation };
+  return { inlineBlameText: () => blame.lastAnnotation, activeRepoRoot: () => getActiveRepoRoot() };
 }
 
 function isCommitTarget(v: unknown): v is CommitTarget {

@@ -47,3 +47,8 @@ jobs:
       - name: integration tests on the minimum supported VS Code (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a npm run test:integration:minimum
+
+      # The built-in Git extension not loaded next to Gitline (as in a Remote SSH window).
+      - name: integration tests without the built-in Git extension (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration:no-git-ext

@@ -1,4 +1,5 @@
 import * as assert from "assert";
+import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
 import type { GitlineExports } from "../../src/extension";
@@ -25,6 +26,53 @@ describe("Gitline in VS Code", function () {
     assert.ok(extension, "extension is installed in the test host");
     await extension.activate();
     assert.ok(extension.isActive);
+  });
+
+  it("activates even when the built-in Git extension is not loaded (Remote SSH case)", async function () {
+    if (process.env.GITLINE_TEST_NO_GIT_EXTENSION !== "1") {
+      this.skip(); // only the `no-git-ext` run (npm run test:integration:no-git-ext) disables it
+    }
+    const git = vscode.extensions.getExtension("vscode.git");
+    assert.ok(!git || !git.isActive, "the Git extension really is off in this run");
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)!;
+    await extension.activate();
+    assert.ok(extension.isActive, "Gitline activated without it");
+    // And the panel still works: it finds repositories through git itself.
+    await vscode.commands.executeCommand("gitline.openCommitGraph");
+  });
+
+  /** The repository Gitline picks while a file of `repo` is the active editor. */
+  async function pickedRootFor(repo: TempRepo): Promise<string | null> {
+    repo.write("pick.txt", "x\n");
+    repo.commitAll("pick");
+    await vscode.window.showTextDocument(vscode.Uri.file(path.join(repo.root, "pick.txt")));
+    const api = vscode.extensions.getExtension<GitlineExports>(EXTENSION_ID)!.exports;
+    const root = await api.activeRepoRoot();
+    return root ? fs.realpathSync(root) : null;
+  }
+
+  it("finds the active file's repository (without the Git extension in the no-git-ext run)", async () => {
+    const repo = new TempRepo();
+    try {
+      assert.strictEqual(await pickedRootFor(repo), fs.realpathSync(repo.root));
+    } finally {
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      try { repo.dispose(); } catch { /* Windows may still hold a handle */ }
+    }
+  });
+
+  it("still finds it when the user turned Git off (git.enabled: false)", async function () {
+    if (process.env.GITLINE_TEST_NO_GIT_EXTENSION === "1") this.skip(); // no git.enabled setting without the extension
+    const git = () => vscode.workspace.getConfiguration("git");
+    const repo = new TempRepo();
+    try {
+      await git().update("enabled", false, vscode.ConfigurationTarget.Global);
+      assert.strictEqual(await pickedRootFor(repo), fs.realpathSync(repo.root));
+    } finally {
+      await git().update("enabled", undefined, vscode.ConfigurationTarget.Global);
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      try { repo.dispose(); } catch { /* Windows may still hold a handle */ }
+    }
   });
 
   it("registers every contributed command", async () => {
