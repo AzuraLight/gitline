@@ -135,5 +135,15 @@
   "Drag or use ←/→ to resize · double-click to reset · Enter to collapse": "드래그하거나 ←/→로 크기 조절 · 더블클릭으로 초기화 · Enter로 접기",
   "Collapse or expand: {0}": "접기/펴기: {0}",
   "+{0}": "+{0}",
-  "Commits — ↑/↓ to move, Ctrl/Cmd+↓/↑ to follow parent/child, Enter to open": "커밋 — ↑/↓로 이동, Ctrl/Cmd+↓/↑로 부모/자식 따라가기, Enter로 열기"
+  "Commits — ↑/↓ to move, Ctrl/Cmd+↓/↑ to follow parent/child, Enter to open": "커밋 — ↑/↓로 이동, Ctrl/Cmd+↓/↑로 부모/자식 따라가기, Enter로 열기",
+  "Workspace": "작업 공간",
+  "Recent": "최근",
+  "Open another repository…": "다른 저장소 열기…",
+  "Clear recent repositories": "최근 저장소 목록 지우기",
+  "Filter repositories": "저장소 검색",
+  "No repository matches “{0}”": "“{0}”에 맞는 저장소가 없습니다",
+  "Open Repository": "저장소 열기",
+  "Gitline: Open Repository": "Gitline: 저장소 열기",
+  "“{0}” is not inside a Git repository.": "“{0}”은(는) Git 저장소 안에 있지 않습니다.",
+  "The repository changed since the graph was drawn — now showing {0}. Please try again.": "그래프를 그린 뒤 저장소가 바뀌었습니다. 지금은 {0}을(를) 보여 줍니다. 다시 시도하세요."
 }

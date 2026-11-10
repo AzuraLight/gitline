@@ -2,7 +2,7 @@
   "name": "gitline",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "publisher": "AzuraLight",
   "author": {
     "name": "AzuraLight"
@@ -92,6 +92,11 @@
         "category": "Gitline"
       },
       {
+        "command": "gitline.openRepository",
+        "title": "%command.openRepository.title%",
+        "category": "Gitline"
+      },
+      {
         "command": "gitline.revealCommit",
         "title": "%command.revealCommit.title%",
         "category": "Gitline"
@@ -125,6 +130,25 @@
           "default": "current",
           "scope": "window",
           "markdownDescription": "%config.graph.defaultView%"
+        },
+        "gitline.repositories.searchDepth": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 8,
+          "scope": "window",
+          "markdownDescription": "%config.repositories.searchDepth%"
+        },
+        "gitline.repositories.ignoredFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "node_modules"
+          ],
+          "scope": "window",
+          "markdownDescription": "%config.repositories.ignoredFolders%"
         },
         "gitline.graph.defaultBranches": {
           "type": "array",
@@ -195,6 +219,7 @@
     "test:integration": "npm run compile && npm run compile:test && vscode-test --label stable",
     "test:integration:minimum": "npm run compile && npm run compile:test && vscode-test --label minimum",
     "test:integration:no-git-ext": "npm run compile && npm run compile:test && vscode-test --label no-git-ext",
+    "test:integration:multi-repo": "npm run compile && npm run compile:test && vscode-test --label multi-repo",
     "test": "npm run test:unit && npm run test:integration",
     "package": "npm run compile && npx --yes @vscode/vsce@latest package"
   },

@@ -220,3 +220,96 @@ body.gv-resizing * {
   outline: 1px solid var(--vscode-list-focusOutline, var(--vscode-focusBorder));
   outline-offset: -1px;
 }
+
+/* --- Repository picker: sections, name + location, filter, actions --- */
+
+.gv-shell .gv-repo-menu {
+  left: 0;
+  right: auto;
+  min-width: 240px;
+  max-width: min(440px, 90vw);
+  max-height: min(420px, 70vh);
+}
+
+.gv-shell .gv-repo-menu__filter {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 2px 0 6px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 0.84em;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: var(--gv-r-sm, 4px);
+}
+
+.gv-shell .gv-repo-menu__filter:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.gv-shell .gv-repo-menu__section[hidden],
+.gv-shell .gv-repo-menu__item[hidden],
+.gv-shell .gv-repo-menu__empty[hidden] {
+  display: none;
+}
+
+.gv-shell .gv-repo-menu__heading {
+  padding: 6px 10px 2px;
+  font-size: 0.68em;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gv-muted);
+}
+
+.gv-shell .gv-repo-menu__item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.gv-shell .gv-repo-menu__check {
+  flex: 0 0 1em;
+  text-align: center;
+}
+
+.gv-shell .gv-repo-menu__name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gv-shell .gv-repo-menu__detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.9em;
+  color: var(--gv-muted);
+}
+
+.gv-shell .gv-repo-menu__item:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+  background: var(--vscode-list-hoverBackground);
+}
+
+.gv-shell .gv-repo-menu__sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--gv-line);
+}
+
+.gv-shell .gv-repo-menu__action {
+  color: var(--vscode-textLink-foreground, var(--vscode-foreground));
+  padding-left: calc(10px + 1em + 6px);
+}
+
+.gv-shell .gv-repo-menu__empty {
+  padding: 6px 10px;
+  font-size: 0.84em;
+  color: var(--gv-muted);
+}

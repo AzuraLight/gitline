@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import { errorMessage } from "./errors";
 import { buildCommitGraphShellHtml } from "./commitGraphView";
@@ -7,6 +8,7 @@ import {
   readCommitFiles,
   readCompareFiles,
   readCurrentBranchName,
+  getRepoRoot,
   readFirstParent,
   readRecentCommits,
   readOffHeadHashes,
@@ -52,7 +54,8 @@ import {
   type RebaseAction,
   type RebaseTodoItem,
 } from "./rebaseRun";
-import { listRepoRoots, pickCommitGraphRepoRoot } from "./repoPick";
+import { invalidateRepoScan, listRepoRoots, pickCommitGraphRepoRoot, sameRepo } from "./repoPick";
+import { existingRecent, normalizeRecent, pushRecent, repoLabel } from "./repoScan";
 
 let panelViewRef: vscode.WebviewView | undefined;
 let extContext: vscode.ExtensionContext | undefined;
@@ -73,6 +76,35 @@ const OFF_HEAD_CAP = 20000;
  * until the panel has loaded once. A branch that no longer exists is not in it (the view fell back).
  */
 let shownRevs: string[] | null = null;
+
+/** The repository of the graph currently on screen (set with each graph reply). */
+let shownRoot: string | null = null;
+
+/** Webview messages that change a repository: they must run where the graph on screen points. */
+const WRITE_MESSAGES = new Set([
+  "runSync", "commitAction", "branchAction", "stashAction", "createBranchAt", "createTagAt", "renameBranch",
+  "requestRebaseCommits", "applyRebase", "abortRebase", "continueRebase", "skipRebase",
+]);
+
+/**
+ * True when the repository Gitline would act on is the one the graph shows. Otherwise (the picked
+ * repository was deleted, the recent list cleared, the active editor moved to another repository)
+ * nothing runs: the graph reloads with the current repository and the user is told to try again.
+ */
+async function shownRepoIsActive(webview: vscode.Webview): Promise<boolean> {
+  const active = await getActiveRepoRoot();
+  if (!shownRoot || !active || sameRepo(active, shownRoot)) return true;
+  void webview.postMessage({ type: "reloadNow" });
+  void vscode.window.showWarningMessage(
+    vscode.l10n.t("The repository changed since the graph was drawn — now showing {0}. Please try again.", path.basename(active)),
+  );
+  return false;
+}
+
+/** Whether the panel has shown a graph yet (integration tests wait on this instead of retrying a save). */
+export function hasShownGraph(): boolean {
+  return shownRevs !== null;
+}
 /** Numbers graph requests so only the newest reply updates shownRevs (replies can finish out of order). */
 let graphRequestSeq = 0;
 
@@ -175,20 +207,98 @@ function applyGraphConfigChange(ev: vscode.ConfigurationChangeEvent): void {
 export async function getActiveRepoRoot(): Promise<string | null> {
   const stored = extContext?.workspaceState.get<string>(SELECTED_REPO_KEY);
   if (stored) {
-    const repos = await listRepoRoots();
-    if (repos.includes(stored)) {
-      return stored;
+    const { all } = await listAllRepos();
+    const hit = all.find((r) => sameRepo(r, stored));
+    if (hit) {
+      return hit;
     }
+    // The picked repository is gone (deleted, moved, its recent entry cleared): forget it, so the
+    // panel does not keep pointing at a folder that is not there.
+    await extContext?.workspaceState.update(SELECTED_REPO_KEY, undefined);
   }
   return pickCommitGraphRepoRoot();
 }
 
-async function setSelectedRepo(root: string): Promise<void> {
-  const repos = await listRepoRoots();
-  if (!repos.includes(root)) {
+/** The picker's choice (also used by the integration tests). Ignored unless the repository is listed. */
+export async function setSelectedRepo(root: string): Promise<void> {
+  const { all, workspace } = await listAllRepos();
+  const target = all.find((r) => sameRepo(r, root));
+  if (!target) {
     return;
   }
+  await extContext?.workspaceState.update(SELECTED_REPO_KEY, target);
+  // Picking a repository from outside the workspace keeps it near the top of the recent list.
+  if (!workspace.some((w) => sameRepo(w, target))) await rememberRecent(target);
+}
+
+// ---- Recent repositories (opened from outside the workspace) ------------------------------------
+
+/**
+ * Global, not per workspace: "recent" means across windows, as in Fork / GitKraken. One list per
+ * remote kind (local, ssh-remote, wsl, …), so a path opened on one machine is not offered on another
+ * where the same path may be a different repository — or none.
+ */
+function recentReposKey(): string {
+  return vscode.env.remoteName ? `gitline.recentRepos:${vscode.env.remoteName}` : "gitline.recentRepos";
+}
+
+async function readRecent(): Promise<string[]> {
+  const existing = await existingRecent(normalizeRecent(extContext?.globalState.get(recentReposKey())));
+  // The same folder stored twice in different spellings (case, /private/var) shows once.
+  return existing.filter((p, i) => existing.findIndex((q) => sameRepo(p, q)) === i);
+}
+
+export async function rememberRecent(root: string): Promise<void> {
+  const list = normalizeRecent(extContext?.globalState.get(recentReposKey()));
+  await extContext?.globalState.update(recentReposKey(), pushRecent(list, root));
+}
+
+/** Workspace repositories, recent ones not already among them, and both together. */
+async function listAllRepos(force = false): Promise<{ workspace: string[]; recent: string[]; all: string[] }> {
+  const workspace = await listRepoRoots({ force });
+  const recent = (await readRecent()).filter((r) => !workspace.some((w) => sameRepo(w, r)));
+  return { workspace, recent, all: [...workspace, ...recent] };
+}
+
+type RepoItem = { path: string; name: string; detail: string; group: "workspace" | "recent" };
+
+/** What the picker shows for each repository: name, where it is, and which section it belongs to. */
+async function repoItems(force = false): Promise<RepoItem[]> {
+  const { workspace, recent } = await listAllRepos(force);
+  const folders = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+  const item = (p: string, group: RepoItem["group"]): RepoItem => ({ path: p, group, ...repoLabel(p, folders) });
+  return [...workspace.map((p) => item(p, "workspace")), ...recent.map((p) => item(p, "recent"))];
+}
+
+async function sendRepoList(webview: vscode.Webview, force: boolean): Promise<void> {
+  const items = await repoItems(force);
+  const selected = await getActiveRepoRoot();
+  void webview.postMessage({ type: "repoList", items, selectedRepo: selected ?? "" });
+}
+
+/**
+ * "Gitline: Open Repository…": pick any folder (on the remote side in a remote window), make sure
+ * it is a Git repository, remember it as recent and show it.
+ */
+export async function openRepositoryCommand(): Promise<void> {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectFolders: true,
+    canSelectFiles: false,
+    canSelectMany: false,
+    openLabel: vscode.l10n.t("Open Repository"),
+    title: vscode.l10n.t("Gitline: Open Repository"),
+  });
+  const folder = picked?.[0];
+  if (!folder) return;
+  const top = await getRepoRoot(folder.fsPath);
+  if (!top) {
+    void vscode.window.showWarningMessage(vscode.l10n.t("“{0}” is not inside a Git repository.", folder.fsPath));
+    return;
+  }
+  const root = path.resolve(top);
+  await rememberRecent(root);
   await extContext?.workspaceState.update(SELECTED_REPO_KEY, root);
+  await revealCommitPanelAndReload();
 }
 
 async function openCommitPreview(sha: string): Promise<void> {
@@ -426,7 +536,7 @@ async function sendGraphPayload(
     const pf = typeof pathFilter === "string" && pathFilter.trim().length > 0 ? pathFilter.trim() : undefined;
     const q = typeof query === "string" && query.trim().length > 0 ? query.trim() : undefined;
     const branch = await readCurrentBranchName(root);
-    const [commits, offHead, branchTree, working, stashes, rebaseInProgress, sync, repos] = await Promise.all([
+    const [commits, offHead, branchTree, working, stashes, rebaseInProgress, sync, items] = await Promise.all([
       readRecentCommits(root, capped, logRev, pf, q, mergesMode),
       readOffHeadHashes(root, logRev, OFF_HEAD_CAP),
       readBranchTreePayload(root),
@@ -434,15 +544,19 @@ async function sendGraphPayload(
       readStashes(root).catch(() => []),
       isRebaseInProgress(root).catch(() => false),
       readSyncState(root).catch(() => ({ upstream: null, ahead: 0, behind: 0 })),
-      listRepoRoots().catch(() => [root]),
+      repoItems().catch((): RepoItem[] => [{ path: root, group: "workspace", ...repoLabel(root, []) }]),
     ]);
     if (offHead) for (const c of commits) if (offHead.has(c.hash)) c.offHead = true;
-    if (seq === graphRequestSeq) shownRevs = dropSelection ? [] : revs;
+    if (seq === graphRequestSeq) {
+      shownRevs = dropSelection ? [] : revs;
+      shownRoot = root;
+    }
     webview.postMessage({
       type: "graphPayload",
       payload: {
         repoRoot: root,
-        repos,
+        repos: items.map((i) => i.path),
+        repoItems: items,
         selectedRepo: root,
         branch,
         // viewRev: "", ALL_REFS or the one clicked branch; a list is described by viewRefs instead.
@@ -765,7 +879,7 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
       });
 
       webview.onDidReceiveMessage(
-        (msg: {
+        async (msg: {
           type?: string;
           limit?: number;
           hash?: string;
@@ -788,12 +902,33 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
           mode?: string;
           items?: Array<{ sha?: string; subject?: string; action?: string }>;
         }) => {
+          // Anything that changes a repository must act on the one the graph shows.
+          if (typeof msg?.type === "string" && WRITE_MESSAGES.has(msg.type) && !(await shownRepoIsActive(webview))) {
+            return;
+          }
           if (msg?.type === "setFileView" && (msg.mode === "list" || msg.mode === "tree")) {
             void extContext?.workspaceState.update(FILE_VIEW_KEY, msg.mode);
             return;
           }
           if (msg?.type === "selectRepo" && typeof msg.root === "string") {
             void selectRepoAndReload(webview, msg.root);
+            return;
+          }
+          // The picker opened: scan the disk again so a clone made a minute ago shows up.
+          if (msg?.type === "refreshRepos") {
+            void sendRepoList(webview, true);
+            return;
+          }
+          if (msg?.type === "openRepository") {
+            void vscode.commands.executeCommand("gitline.openRepository");
+            return;
+          }
+          if (msg?.type === "clearRecentRepos") {
+            // The graph may have been showing a recent repository: reload so screen and target agree.
+            void extContext?.globalState.update(recentReposKey(), []).then(async () => {
+              await sendRepoList(webview, false);
+              void webview.postMessage({ type: "reloadNow" });
+            });
             return;
           }
           if (
@@ -983,5 +1118,9 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.workspace.onDidChangeConfiguration(applyGraphConfigChange),
+    vscode.workspace.onDidChangeConfiguration((ev) => {
+      if (ev.affectsConfiguration("gitline.repositories")) invalidateRepoScan();
+    }),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => invalidateRepoScan()),
   );
 }

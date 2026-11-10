@@ -28,6 +28,12 @@ export type CommitGraphWebviewUi = {
   togglePaneTitle: string;
   moreRefsLabel: string;
   commitListAria: string;
+  repoMenuWorkspace: string;
+  repoMenuRecent: string;
+  repoMenuOpenOther: string;
+  repoMenuClearRecent: string;
+  repoMenuFilter: string;
+  repoMenuNoMatch: string;
   branchGroupLocal: string;
   branchGroupRemote: string;
   paneLogAria: string;
@@ -104,6 +110,12 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     resizeHint: vscode.l10n.t("Drag or use ←/→ to resize · double-click to reset · Enter to collapse"),
     togglePaneTitle: vscode.l10n.t("Collapse or expand: {0}"),
     moreRefsLabel: vscode.l10n.t("+{0}"),
+    repoMenuWorkspace: vscode.l10n.t("Workspace"),
+    repoMenuRecent: vscode.l10n.t("Recent"),
+    repoMenuOpenOther: vscode.l10n.t("Open another repository…"),
+    repoMenuClearRecent: vscode.l10n.t("Clear recent repositories"),
+    repoMenuFilter: vscode.l10n.t("Filter repositories"),
+    repoMenuNoMatch: vscode.l10n.t("No repository matches “{0}”"),
     commitListAria: vscode.l10n.t("Commits — ↑/↓ to move, Ctrl/Cmd+↓/↑ to follow parent/child, Enter to open"),
     branchGroupLocal: vscode.l10n.t("Local"),
     branchGroupRemote: vscode.l10n.t("Remote: {0}"),

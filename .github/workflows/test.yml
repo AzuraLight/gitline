@@ -52,3 +52,8 @@ jobs:
       - name: integration tests without the built-in Git extension (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a npm run test:integration:no-git-ext
+
+      # A workspace folder that is no repository, with repositories one and two levels below it.
+      - name: integration tests with repositories below the workspace folder (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration:multi-repo

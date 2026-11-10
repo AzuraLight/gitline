@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.6.0
+
+### Added
+
+- **Repositories below the workspace folder are found.** Open a parent folder that is not a
+  repository itself and Gitline lists the repositories inside it — by default two levels down
+  (`research/json-editor`), where VS Code's own Git stops at one. Set the depth with
+  `gitline.repositories.searchDepth` (0–8) and skip folders with
+  `gitline.repositories.ignoredFolders` (default `node_modules`). Hidden folders and symbolic
+  links are not entered, and the scan is capped so a huge tree cannot stall the panel.
+- **Gitline: Open Repository…** — open any repository, also outside the workspace (on the remote
+  side in a remote window). It joins a **Recent** list (10, across windows; folders that are
+  gone drop out, and the list can be cleared).
+- **A better repository picker.** Always available from the repository name in the header, even
+  with one repository. Workspace and Recent sections; each entry shows where it sits
+  (`teachers/research`), so same-named clones can be told apart; a filter box once there are more
+  than six; ↑/↓, Enter and Esc work, and focus stays put when the fresh list arrives. Screen
+  readers get a list of options. Opening it re-scans the disk, so a fresh clone shows up. Recent
+  repositories are kept per machine kind (local, SSH, WSL, …).
+
+### Fixed
+
+- The repository picker could open partly off-screen to the left.
+- Actions (checkout, reset, branch and stash actions, rebase, pull / push) now only run on the
+  repository the graph shows. If the target changed underneath — the picked repository was
+  deleted, the recent list cleared — the graph reloads and you are asked to try again, instead
+  of the action landing on a repository you were not looking at.
+- A deleted repository drops out of the picker and stops being the active one right away.
+- The same repository reached through different spellings (`/tmp` and `/private/tmp`, letter
+  case) shows once. A `.git` that is a symbolic link counts as a repository, as it does for git.
+
+### Internal
+
+- README: a screenshot of the repository picker (light and dark).
+- Integration tests also run on a workspace folder that is no repository with repositories one
+  and two levels below it (`npm run test:integration:multi-repo`, and in CI on Linux); the
+  save-view test waits for the graph instead of retrying the command (one notification, not many).
+
 ## 1.5.2
 
 ### Fixed

@@ -116,7 +116,7 @@ export function buildCommitGraphShellHtml(
       </div>
       <div class="gv-repo-picker">
         <button type="button" class="gv-repo-badge" id="repo-path" aria-haspopup="true" aria-expanded="false" title="${escapeHtml(ui.repoPickerTitle)}"></button>
-        <div class="gv-repo-menu" id="repo-menu" role="menu" hidden></div>
+        <div class="gv-repo-menu" id="repo-menu" role="dialog" aria-label="${escapeHtml(ui.repoPickerTitle)}" hidden></div>
       </div>
     </div>
     <div class="gv-repo-fullpath gv-topbar__path" id="repo-full" hidden></div>

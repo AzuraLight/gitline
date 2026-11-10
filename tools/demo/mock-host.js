@@ -182,9 +182,10 @@
     if (q) list = list.filter(function (c) { return c.subject.toLowerCase().indexOf(q) >= 0 || c.hash.indexOf(q) === 0; });
     return {
       commits: list.slice(0, req.limit || 200),
-      repoRoot: "/Users/demo/acme-shop",
-      repos: ["/Users/demo/acme-shop", "/Users/demo/acme-admin"],
-      selectedRepo: "/Users/demo/acme-shop",
+      repoRoot: selectedRepo,
+      repos: repoItems().map(function (i) { return i.path; }),
+      repoItems: repoItems(),
+      selectedRepo: selectedRepo,
       branch: "main",
       viewRev: viewRev,
       viewRefs: viewRefs,
@@ -201,8 +202,26 @@
     };
   }
 
+  // Repositories as the extension lists them: the workspace (found up to two levels down) and
+  // recent ones opened from elsewhere. The graph itself is the same for every repository here.
+  var selectedRepo = "/Users/demo/acme-shop";
+  var recentRepos = [{ path: "/Users/demo/clones/legacy-shop", name: "legacy-shop", detail: "/Users/demo/clones", group: "recent" }];
+  function repoItems() {
+    return [
+      { path: "/Users/demo/acme-shop", name: "acme-shop", detail: "", group: "workspace" },
+      { path: "/Users/demo/acme-shop/services/acme-admin", name: "acme-admin", detail: "acme-shop/services", group: "workspace" },
+      { path: "/Users/demo/acme-shop/research/json-editor", name: "json-editor", detail: "acme-shop/research", group: "workspace" },
+      { path: "/Users/demo/acme-shop/research/json-viewer", name: "json-viewer", detail: "acme-shop/research", group: "workspace" },
+      { path: "/Users/demo/acme-shop/research/text-editor", name: "text-editor", detail: "acme-shop/research", group: "workspace" },
+      { path: "/Users/demo/acme-shop/tools/release-bot", name: "release-bot", detail: "acme-shop/tools", group: "workspace" },
+    ].concat(recentRepos);
+  }
+
   var HANDLERS = {
     requestGraph: function (m) { reply({ type: "graphPayload", payload: graphPayload(m) }); },
+    selectRepo: function (m) { selectedRepo = m.root; reply({ type: "reloadNow" }); },
+    refreshRepos: function () { reply({ type: "repoList", items: repoItems(), selectedRepo: selectedRepo }); },
+    clearRecentRepos: function () { recentRepos = []; reply({ type: "repoList", items: repoItems(), selectedRepo: selectedRepo }); },
     requestCommitFiles: function (m) { reply({ type: "commitFiles", hash: m.hash, files: filesFor(m.hash) }); },
     requestStashFiles: function (m) { reply({ type: "stashFiles", ref: m.hash, files: filesFor("abcdef12") }); },
     requestCompareFiles: function (m) { reply({ type: "compareFiles", a: m.a, b: m.b, files: filesFor(m.b) }); },

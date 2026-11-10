@@ -135,5 +135,15 @@
   "Drag or use ←/→ to resize · double-click to reset · Enter to collapse": "Drag or use ←/→ to resize · double-click to reset · Enter to collapse",
   "Collapse or expand: {0}": "Collapse or expand: {0}",
   "+{0}": "+{0}",
-  "Commits — ↑/↓ to move, Ctrl/Cmd+↓/↑ to follow parent/child, Enter to open": "Commits — ↑/↓ to move, Ctrl/Cmd+↓/↑ to follow parent/child, Enter to open"
+  "Commits — ↑/↓ to move, Ctrl/Cmd+↓/↑ to follow parent/child, Enter to open": "Commits — ↑/↓ to move, Ctrl/Cmd+↓/↑ to follow parent/child, Enter to open",
+  "Workspace": "Workspace",
+  "Recent": "Recent",
+  "Open another repository…": "Open another repository…",
+  "Clear recent repositories": "Clear recent repositories",
+  "Filter repositories": "Filter repositories",
+  "No repository matches “{0}”": "No repository matches “{0}”",
+  "Open Repository": "Open Repository",
+  "Gitline: Open Repository": "Gitline: Open Repository",
+  "“{0}” is not inside a Git repository.": "“{0}” is not inside a Git repository.",
+  "The repository changed since the graph was drawn — now showing {0}. Please try again.": "The repository changed since the graph was drawn — now showing {0}. Please try again."
 }

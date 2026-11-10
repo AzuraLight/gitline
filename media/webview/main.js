@@ -43,6 +43,7 @@
     hasMore: false,
     loadingMore: false,
     repoList: [],
+    repoItems: [],     // { path, name, detail, group: "workspace" | "recent" } for the picker
     selectedRepo: "",
     fileView: (window.__GV_PREFS__ || {}).fileView === "tree" ? "tree" : "list", // changed-files pane: flat list or folder tree
   };
@@ -170,13 +171,24 @@
     }
     var suffix = viewSuffix(branch, viewRev, viewRefs || []);
     var line = u.baseName(repoAbsPath) + (suffix.text ? " · " + suffix.text : "");
-    var multi = S.repoList.length > 1;
-    badge.textContent = multi ? line + " ▾" : line;
+    badge.textContent = line + " ▾";
     badge.title = repoAbsPath + (suffix.list ? "\n\n" + suffix.list : "");
-    badge.classList.toggle("gv-repo-badge--picker", multi);
+    badge.classList.add("gv-repo-badge--picker");
     // The full path lives in the badge tooltip; a separate path row cost a whole header line.
     full.textContent = repoAbsPath;
     full.hidden = true;
+  }
+
+  // ---- Repository picker ------------------------------------------------------------------
+  // Always available (even with one repository: it is also where "Open another repository…"
+  // lives). Sections: the workspace's repositories, then recent ones opened from elsewhere.
+  // Opening it asks the host to scan the disk again; the list re-renders when that answer comes.
+
+  var repoFilter = "";
+
+  function repoItemsFromState() {
+    if (S.repoItems && S.repoItems.length) return S.repoItems;
+    return S.repoList.map(function (p) { return { path: p, name: u.baseName(p), detail: "", group: "workspace" }; });
   }
 
   function closeRepoMenu() {
@@ -184,33 +196,173 @@
     $("repo-path").setAttribute("aria-expanded", "false");
   }
 
-  function repoMenuItem(repoPath) {
-    var active = repoPath === S.selectedRepo;
-    var item = u.el("button", "gv-repo-menu__item" + (active ? " gv-repo-menu__item--active" : ""),
-      (active ? "✓ " : "  ") + u.baseName(repoPath));
+  function menuButtons() {
+    return Array.prototype.slice.call($("repo-menu").querySelectorAll("button.gv-repo-menu__item:not([hidden])"))
+      .filter(function (b) { return !b.closest(".gv-repo-menu__section[hidden]"); });
+  }
+
+  function repoMenuItem(it) {
+    var active = it.path === S.selectedRepo;
+    var item = u.el("button", "gv-repo-menu__item" + (active ? " gv-repo-menu__item--active" : ""));
     item.type = "button";
-    item.setAttribute("role", "menuitem");
-    item.title = repoPath;
+    // A listbox of repositories: each entry is an option, the current one selected.
+    item.setAttribute("role", "option");
+    item.setAttribute("aria-selected", active ? "true" : "false");
+    item.title = it.path;
+    item.appendChild(u.el("span", "gv-repo-menu__check", active ? "✓" : ""));
+    item.appendChild(u.el("span", "gv-repo-menu__name", it.name));
+    if (it.detail) item.appendChild(u.el("span", "gv-repo-menu__detail", it.detail));
     item.addEventListener("click", function (ev) {
       ev.stopPropagation();
       closeRepoMenu();
-      if (!active) post("selectRepo", { root: repoPath });
+      if (!active) post("selectRepo", { root: it.path });
     });
     return item;
   }
 
+  function actionItem(label, cls, onClick) {
+    var b = u.el("button", "gv-repo-menu__item gv-repo-menu__action " + cls, label);
+    b.type = "button";
+    b.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      closeRepoMenu();
+      onClick();
+    });
+    return b;
+  }
+
+  function section(title, items) {
+    if (!items.length) return null;
+    var box = u.el("div", "gv-repo-menu__section");
+    box.setAttribute("role", "group");
+    box.setAttribute("aria-label", title);
+    box.appendChild(u.el("div", "gv-repo-menu__heading", title));
+    items.forEach(function (it) { box.appendChild(repoMenuItem(it)); });
+    return box;
+  }
+
+  /** Hides entries that do not match the filter (name or location), and sections left empty. */
+  function applyRepoFilter() {
+    var menu = $("repo-menu");
+    var q = repoFilter.trim().toLowerCase();
+    var any = false;
+    Array.prototype.forEach.call(menu.querySelectorAll(".gv-repo-menu__section"), function (sec) {
+      var shown = 0;
+      Array.prototype.forEach.call(sec.querySelectorAll("button.gv-repo-menu__item"), function (b) {
+        var ok = !q || (b.textContent + " " + b.title).toLowerCase().indexOf(q) >= 0;
+        b.hidden = !ok;
+        if (ok) shown++;
+      });
+      sec.hidden = shown === 0;
+      if (shown) any = true;
+    });
+    var empty = menu.querySelector(".gv-repo-menu__empty");
+    if (empty) {
+      empty.hidden = any || !q;
+      empty.textContent = (UI.repoMenuNoMatch || "No repository matches “{0}”").replace("{0}", repoFilter.trim());
+    }
+  }
+
+  /** What had focus in the menu, to give it back after a re-render (the host's fresh list). */
+  function menuFocusKey(menu) {
+    var a = document.activeElement;
+    if (!a || !menu.contains(a)) return a === document.body || !a ? { lost: true } : null;
+    if (a.classList.contains("gv-repo-menu__filter")) return { filter: true };
+    if (a.classList.contains("gv-repo-menu__open")) return { cls: "gv-repo-menu__open" };
+    if (a.classList.contains("gv-repo-menu__clear")) return { cls: "gv-repo-menu__clear" };
+    return a.title ? { path: a.title } : { lost: true };
+  }
+
+  function restoreMenuFocus(menu, key) {
+    if (!key) return;
+    var target = null;
+    if (key.filter) target = menu.querySelector(".gv-repo-menu__filter");
+    else if (key.cls) target = menu.querySelector("." + key.cls);
+    else if (key.path) {
+      target = menuButtons().filter(function (b) { return b.title === key.path; })[0] || null;
+    }
+    // The focused entry is gone (or focus had dropped to the page): land on the current repository.
+    if (!target) target = menu.querySelector(".gv-repo-menu__filter") || menu.querySelector(".gv-repo-menu__item--active") || menuButtons()[0];
+    if (target) target.focus();
+  }
+
+  function renderRepoMenu(focusFirst) {
+    var menu = $("repo-menu");
+    var items = repoItemsFromState();
+    var focusKey = focusFirst ? null : menuFocusKey(menu);
+    menu.textContent = "";
+    if (items.length > 6) {
+      var filter = u.el("input", "gv-repo-menu__filter");
+      filter.type = "search";
+      filter.placeholder = UI.repoMenuFilter || "Filter repositories";
+      filter.setAttribute("aria-label", filter.placeholder);
+      filter.value = repoFilter;
+      filter.addEventListener("click", function (ev) { ev.stopPropagation(); });
+      filter.addEventListener("input", function () { repoFilter = filter.value; applyRepoFilter(); });
+      menu.appendChild(filter);
+    }
+    var ws = section(UI.repoMenuWorkspace || "Workspace", items.filter(function (i) { return i.group !== "recent"; }));
+    var recent = items.filter(function (i) { return i.group === "recent"; });
+    var rc = section(UI.repoMenuRecent || "Recent", recent);
+    var list = u.el("div", "gv-repo-menu__list");
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", UI.repoPickerTitle || "Repositories");
+    if (ws) list.appendChild(ws);
+    if (rc) list.appendChild(rc);
+    menu.appendChild(list);
+    var empty = u.el("div", "gv-repo-menu__empty");
+    empty.setAttribute("role", "status");
+    empty.hidden = true;
+    menu.appendChild(empty);
+    var sep = u.el("div", "gv-repo-menu__sep");
+    sep.setAttribute("role", "separator");
+    menu.appendChild(sep);
+    menu.appendChild(actionItem(UI.repoMenuOpenOther || "Open another repository…", "gv-repo-menu__open",
+      function () { post("openRepository", {}); }));
+    if (recent.length) {
+      menu.appendChild(actionItem(UI.repoMenuClearRecent || "Clear recent repositories", "gv-repo-menu__clear",
+        function () { post("clearRecentRepos", {}); }));
+    }
+    applyRepoFilter();
+    if (focusFirst) {
+      var first = menu.querySelector(".gv-repo-menu__filter") || menu.querySelector(".gv-repo-menu__item--active") || menuButtons()[0];
+      if (first) first.focus();
+    } else {
+      restoreMenuFocus(menu, focusKey);
+    }
+  }
+
   function toggleRepoMenu() {
     var menu = $("repo-menu");
-    if (S.repoList.length < 2) return;
     if (!menu.hidden) {
       closeRepoMenu();
       return;
     }
-    menu.textContent = "";
-    S.repoList.forEach(function (p) { menu.appendChild(repoMenuItem(p)); });
+    repoFilter = "";
     menu.hidden = false;
     $("repo-path").setAttribute("aria-expanded", "true");
+    renderRepoMenu(true);
+    post("refreshRepos", {});
   }
+
+  // Keyboard inside the menu: ↑/↓ move, Home/End jump, Esc closes and returns to the badge.
+  $("repo-menu").addEventListener("keydown", function (ev) {
+    var buttons = menuButtons();
+    var at = buttons.indexOf(document.activeElement);
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      closeRepoMenu();
+      $("repo-path").focus();
+    } else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      if (!buttons.length) return;
+      var next = ev.key === "ArrowDown" ? (at < 0 ? 0 : Math.min(buttons.length - 1, at + 1)) : (at <= 0 ? 0 : at - 1);
+      buttons[next].focus();
+    } else if ((ev.key === "Home" || ev.key === "End") && document.activeElement.tagName !== "INPUT") {
+      ev.preventDefault();
+      if (buttons.length) buttons[ev.key === "Home" ? 0 : buttons.length - 1].focus();
+    }
+  });
 
   function renderSync(sync) {
     var counts = $("sync-counts");
@@ -287,6 +439,7 @@
     u.setHidden($("branch-bar"), false);
     branchTree.render(payload.branchTree || { current: "", locals: [], remotes: [] });
     S.repoList = Array.isArray(payload.repos) ? payload.repos : [];
+    S.repoItems = Array.isArray(payload.repoItems) ? payload.repoItems : [];
     S.selectedRepo = payload.selectedRepo || payload.repoRoot || "";
     setRepoHeader(payload.repoRoot || "", payload.branch || "", payload.viewRev || "",
       Array.isArray(payload.viewRefs) ? payload.viewRefs : []);
@@ -319,6 +472,13 @@
 
   var handlers = {
     reloadNow: function () { requestGraph(true); },
+    // Fresh repository list (the picker was opened, or the recent list was cleared).
+    repoList: function (d) {
+      S.repoItems = Array.isArray(d.items) ? d.items : [];
+      S.repoList = S.repoItems.map(function (i) { return i.path; });
+      if (typeof d.selectedRepo === "string" && d.selectedRepo) S.selectedRepo = d.selectedRepo;
+      if (!$("repo-menu").hidden) renderRepoMenu(false);
+    },
     graphPayload: function (d) { renderPayload(d.payload); },
     graphError: function (d) { renderGraphError(d.code, d.message); },
     commitFiles: function (d) { if (d.hash === S.currentHash) detailPane.renderFiles(d.files || [], "commit"); },

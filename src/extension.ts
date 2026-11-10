@@ -3,6 +3,7 @@ import { errorMessage } from "./errors";
 import { InlineBlame, type CommitTarget } from "./blame/inlineBlame";
 import { commitShowUri, registerCommitShowProvider } from "./commitShowProvider";
 import { repoRelativePath, resolveRepoRootForFile } from "./gitExec";
+import { listRepoRoots } from "./repoPick";
 import {
   getActiveRepoRoot,
   registerGitlinePanelWebview,
@@ -11,6 +12,10 @@ import {
   revealCommitPanelWithPath,
   runSyncWithProgress,
   saveCurrentViewAsDefault,
+  openRepositoryCommand,
+  setSelectedRepo,
+  hasShownGraph,
+  rememberRecent,
   type SyncOp,
 } from "./panelWebview";
 
@@ -19,6 +24,14 @@ export type GitlineExports = {
   inlineBlameText(): string | undefined;
   /** The repository the panel acts on right now (same lookup the graph uses). */
   activeRepoRoot(): Promise<string | null>;
+  /** Every repository the picker lists for the workspace (scans the disk again). */
+  workspaceRepos(): Promise<string[]>;
+  /** What the picker does when a repository is chosen. */
+  selectRepo(root: string): Promise<void>;
+  /** True once the panel has shown a graph. */
+  hasShownGraph(): boolean;
+  /** What "Open Repository…" does after the folder dialog: put a repository on the recent list. */
+  addRecentRepo(root: string): Promise<void>;
 };
 
 export function activate(context: vscode.ExtensionContext): GitlineExports {
@@ -26,6 +39,7 @@ export function activate(context: vscode.ExtensionContext): GitlineExports {
   context.subscriptions.push(registerGitlinePanelWebview(context));
   context.subscriptions.push(
     vscode.commands.registerCommand("gitline.saveViewAsDefault", () => saveCurrentViewAsDefault()),
+    vscode.commands.registerCommand("gitline.openRepository", () => openRepositoryCommand()),
   );
 
   const openGraph = vscode.commands.registerCommand("gitline.openCommitGraph", async () => {
@@ -85,7 +99,14 @@ export function activate(context: vscode.ExtensionContext): GitlineExports {
 
   context.subscriptions.push(openGraph, openFileHistory, pull, push, fetchAllCmd);
   const blame = registerInlineBlame(context);
-  return { inlineBlameText: () => blame.lastAnnotation, activeRepoRoot: () => getActiveRepoRoot() };
+  return {
+    inlineBlameText: () => blame.lastAnnotation,
+    activeRepoRoot: () => getActiveRepoRoot(),
+    workspaceRepos: () => listRepoRoots({ force: true }),
+    selectRepo: (root: string) => setSelectedRepo(root),
+    hasShownGraph: () => hasShownGraph(),
+    addRecentRepo: (root: string) => rememberRecent(root),
+  };
 }
 
 function isCommitTarget(v: unknown): v is CommitTarget {

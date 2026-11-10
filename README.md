@@ -37,10 +37,15 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 
 ### Multi-repo and remote sync
 
-- **Repo picker** — in a multi-root workspace or a monorepo with several checkouts, the repo name in the header becomes a picker (▾). Switch repos and the whole view follows; the choice is remembered per workspace.
+- **Repo picker** — click the repo name in the header (▾). It lists every repository in the workspace — including ones below a parent folder that is not a repository itself, two levels down by default (`gitline.repositories.searchDepth`) — and recent ones you opened from elsewhere, each with its location; type to filter. **Gitline: Open Repository…** opens any repository, also outside the workspace. Switch repos and the whole view follows; the choice is remembered per workspace.
 - **Pull / Push / Fetch** buttons in the header, with a progress notification. Push targets the current branch's upstream (publishing to `origin` with `-u` when unset); Pull is fast-forward-only; Fetch runs `--all --prune`. Remote operations stop after 2 minutes and never wait on a hidden credential prompt.
 - **`↑ahead ↓behind` badge** shows the current branch versus its upstream.
 - **Force push (with lease)** for rebased/amended branches, from the branch context menu.
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/repo-picker-light.png">
+  <img src="docs/images/repo-picker-dark.png" width="640" alt="The repository picker open from the header: workspace repositories with their locations, including two found two levels below the workspace folder, a recent repository, a filter box and Open another repository">
+</picture>
 
 ### Working tree and stashes
 
@@ -100,6 +105,7 @@ For per-file history: right-click any file → **Gitline: File History**, or use
 | `Gitline: Push` | Push the current branch to its upstream (or publish to `origin`). |
 | `Gitline: Fetch All` | `git fetch --all --prune` on the active repo. |
 | `Gitline: Toggle Inline Blame` | Turns the current-line blame annotation on or off. |
+| `Gitline: Open Repository…` | Opens any Git repository, also outside the workspace, in the graph; it is kept in the picker's Recent list. |
 | `Gitline: Save Current View as Default` | Saves the graph's current view (current branch, all branches, or the branches you picked) as the default, in workspace settings. Also in the branch context menu. |
 
 ## Settings
@@ -107,6 +113,8 @@ For per-file history: right-click any file → **Gitline: File History**, or use
 | Setting | Default | What it does |
 |---|---|---|
 | `gitline.inlineBlame.enabled` | `false` | Show who last changed the current line, when, and why — at the end of the line. |
+| `gitline.repositories.searchDepth` | `2` | How many folder levels below each workspace folder Gitline looks for repositories (0 = only the folder itself; VS Code's own Git looks 1 level down). |
+| `gitline.repositories.ignoredFolders` | `["node_modules"]` | Folder names never searched for repositories. |
 | `gitline.graph.defaultView` | `current` | What the graph opens with: `current` (the current branch), `all` (every branch and tag), or `selected` (the branches below). Applied when the panel is created — window start or reload; a view you pick in the sidebar stays until then. Leave it unset to reopen the last view you used. |
 | `gitline.graph.defaultBranches` | `[]` | For `selected`: branch, remote branch or tag names, and patterns where `*` matches within one path segment — `["main", "origin/team/*"]`. Names a repository doesn't have are skipped. |
 

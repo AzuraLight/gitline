@@ -16,6 +16,7 @@ const COMMANDS = [
   "gitline.revealCommit",
   "gitline.openCommitPatch",
   "gitline.saveViewAsDefault",
+  "gitline.openRepository",
 ];
 
 describe("Gitline in VS Code", function () {
@@ -131,20 +132,21 @@ describe("Gitline in VS Code", function () {
       await config().update("defaultBranches", ["keep/*"], G);
       await vscode.window.showTextDocument(vscode.Uri.file(path.join(repo.root, "a.txt")));
       await vscode.commands.executeCommand("gitline.openCommitGraph");
-      // The webview asks for its graph on its own; poll until a save goes through.
-      const saved = await waitFor(
-        async () => {
-          await vscode.commands.executeCommand("gitline.saveViewAsDefault");
-          return config().inspect("defaultView")?.globalValue;
-        },
-        (v) => v !== undefined,
-        15_000,
-      );
-      if (saved === undefined) {
-        // NOT COVERED: the panel webview did not render a graph in this headless host.
+      // The webview asks for its graph on its own. Wait for that, then save once — retrying the
+      // save itself would stack one "Gitline will open with …" notification per attempt.
+      const api = vscode.extensions.getExtension<GitlineExports>(EXTENSION_ID)!.exports;
+      if (vscode.workspace.workspaceFolders?.length) {
+        this.skip(); // this test is about the no-folder window (save goes to user settings)
+      }
+      const shown = await waitFor(() => api.hasShownGraph(), (v) => v, 15_000);
+      if (!shown) {
+        // NOT COVERED: the panel webview did not render a graph in this headless host — skip
+        // rather than fail on a host limitation; every other run checks the save below.
         this.skip();
       }
-      assert.strictEqual(saved, "current");
+      await vscode.commands.executeCommand("gitline.saveViewAsDefault");
+      const saved = config().inspect("defaultView")?.globalValue;
+      assert.strictEqual(saved, "current", "a graph was shown, so the save must go through");
       assert.deepStrictEqual(config().inspect("defaultBranches")?.globalValue, ["keep/*"], "branch list left in place");
       assert.strictEqual(config().inspect("defaultView")?.workspaceValue, undefined);
     } finally {
@@ -194,6 +196,160 @@ describe("Gitline in VS Code", function () {
     }
   });
 
+  // Only in the multi-repo run: the workspace folder is not a repository; repositories sit below it
+  // (the layout from the "picker shows only one repository" report — see .vscode-test.mjs).
+  describe("repositories below a workspace folder that is none (multi-repo run)", () => {
+    const api = () => vscode.extensions.getExtension<GitlineExports>(EXTENSION_ID)!.exports;
+    const folder = () => vscode.workspace.workspaceFolders![0].uri.fsPath;
+    const relative = (list: string[]) =>
+      list.map((p) => path.relative(fs.realpathSync.native(folder()), fs.realpathSync.native(p)).split(path.sep).join("/")).sort();
+    const depth = () => vscode.workspace.getConfiguration("gitline.repositories");
+
+    before(function () {
+      if (process.env.GITLINE_TEST_MULTI_REPO !== "1") this.skip();
+    });
+
+    it("lists the repositories one and two levels down, not the decoys", async () => {
+      assert.deepStrictEqual(relative(await api().workspaceRepos()), [
+        "research/json-editor",
+        "research/json-viewer",
+        "research/text-editor",
+        "teachers-class-fe",
+      ]);
+    });
+
+    it("follows gitline.repositories.searchDepth, and goes back when it is reset", async () => {
+      try {
+        await depth().update("searchDepth", 1, vscode.ConfigurationTarget.Workspace);
+        assert.deepStrictEqual(relative(await api().workspaceRepos()), ["teachers-class-fe"]);
+        await depth().update("searchDepth", 4, vscode.ConfigurationTarget.Workspace);
+        assert.ok(relative(await api().workspaceRepos()).includes("research/deep/deeper/too-deep"));
+      } finally {
+        await depth().update("searchDepth", undefined, vscode.ConfigurationTarget.Workspace);
+      }
+      assert.strictEqual(relative(await api().workspaceRepos()).length, 4);
+    });
+
+    it("a recent repository outside the workspace can be picked; once it is deleted the panel lets go", async () => {
+      const outside = new TempRepo();
+      outside.commitEmpty("outside");
+      try {
+        await api().selectRepo(outside.root);
+        assert.ok(!sameDir(await api().activeRepoRoot(), outside.root), "not recent yet: picking it is ignored");
+        await api().addRecentRepo(outside.root);
+        await api().selectRepo(outside.root);
+        assert.ok(sameDir(await api().activeRepoRoot(), outside.root), "recent: picking it works");
+        fs.rmSync(outside.root, { recursive: true, force: true });
+        const after = await api().activeRepoRoot();
+        assert.ok(!sameDir(after, outside.root) && (after === null || fs.existsSync(after)), String(after));
+      } finally {
+        try { outside.dispose(); } catch { /* already removed */ }
+      }
+    });
+
+    it("makes a two-levels-down repository the active one when it is picked", async () => {
+      const target = (await api().workspaceRepos()).find((p) => p.endsWith("json-viewer"))!;
+      const doc = await vscode.workspace.openTextDocument({ content: "" }); // no file editor steering the pick
+      await vscode.window.showTextDocument(doc);
+      await api().selectRepo(target);
+      const active = await api().activeRepoRoot();
+      assert.ok(active && fs.realpathSync.native(active) === fs.realpathSync.native(target), String(active));
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+    });
+
+    // ---- 1.6.0 edge cases (test engineer) ----
+    const same = (a: string | null, b: string) => !!a && fs.existsSync(a) && fs.realpathSync.native(a) === fs.realpathSync.native(b);
+    const ignored = () => vscode.workspace.getConfiguration("gitline.repositories");
+
+    it("ignores selectRepo for a repository outside the workspace that is not recent", async () => {
+      const inside = (await api().workspaceRepos()).find((p) => p.endsWith("json-editor"))!;
+      await api().selectRepo(inside);
+      const outside = new TempRepo();
+      try {
+        await api().selectRepo(outside.root);
+        assert.ok(same(await api().activeRepoRoot(), inside), "selection unchanged");
+        assert.ok(!(await api().workspaceRepos()).some((p) => fs.realpathSync.native(p) === fs.realpathSync.native(outside.root)));
+      } finally {
+        outside.dispose();
+      }
+    });
+
+    it("ignores selectRepo for junk input (empty string, the parent folder that is no repository, a missing path)", async () => {
+      const inside = (await api().workspaceRepos()).find((p) => p.endsWith("json-editor"))!;
+      await api().selectRepo(inside);
+      for (const junk of ["", folder(), path.join(folder(), "nope")]) await api().selectRepo(junk);
+      assert.ok(same(await api().activeRepoRoot(), inside));
+    });
+
+    it("follows gitline.repositories.ignoredFolders, and goes back when it is reset", async () => {
+      try {
+        await ignored().update("ignoredFolders", ["research", "node_modules"], vscode.ConfigurationTarget.Workspace);
+        assert.deepStrictEqual(relative(await api().workspaceRepos()), ["teachers-class-fe"]);
+        await ignored().update("ignoredFolders", [], vscode.ConfigurationTarget.Workspace);
+        await ignored().update("searchDepth", 3, vscode.ConfigurationTarget.Workspace);
+        assert.ok(relative(await api().workspaceRepos()).includes("web/node_modules/some-pkg"), "empty list enters node_modules");
+      } finally {
+        await ignored().update("ignoredFolders", undefined, vscode.ConfigurationTarget.Workspace);
+        await ignored().update("searchDepth", undefined, vscode.ConfigurationTarget.Workspace);
+      }
+      assert.strictEqual(relative(await api().workspaceRepos()).length, 4);
+    });
+
+    it("a repository created after the last scan can be picked only after a re-scan", async () => {
+      await api().workspaceRepos(); // fills the scan cache
+      const fresh = path.join(folder(), "research", "late-arrival");
+      fs.mkdirSync(path.join(fresh, ".git"), { recursive: true });
+      try {
+        const before = await api().activeRepoRoot();
+        await api().selectRepo(fresh); // cached scan does not know it yet → ignored
+        assert.strictEqual(await api().activeRepoRoot(), before);
+        assert.ok(relative(await api().workspaceRepos()).includes("research/late-arrival"), "forced re-scan finds it");
+        await api().selectRepo(fresh);
+        assert.ok(same(await api().activeRepoRoot(), fresh));
+      } finally {
+        fs.rmSync(fresh, { recursive: true, force: true });
+        await api().workspaceRepos();
+      }
+    });
+
+    // A selected repository deleted from disk must stop being the active one at once — not after
+    // the next re-scan (the stored scan drops folders whose .git is gone, and the stale selection
+    // is forgotten).
+    it("a selected repository deleted from disk is no longer the active one", async () => {
+      const doomed = path.join(folder(), "research", "doomed");
+      fs.mkdirSync(path.join(doomed, ".git"), { recursive: true });
+      try {
+        await api().workspaceRepos();
+        await api().selectRepo(doomed);
+        assert.ok(same(await api().activeRepoRoot(), doomed));
+        fs.rmSync(doomed, { recursive: true, force: true });
+        const active = await api().activeRepoRoot();
+        assert.ok(active === null || fs.existsSync(active), `active repo points at a deleted folder: ${active}`);
+        assert.strictEqual(await api().activeRepoRoot(), active, "stable across calls");
+      } finally {
+        fs.rmSync(doomed, { recursive: true, force: true });
+        await api().workspaceRepos();
+      }
+    });
+
+    it("after a deleted selection and a re-scan, the active repository is an existing one and stays stable", async () => {
+      const doomed = path.join(folder(), "research", "doomed2");
+      fs.mkdirSync(path.join(doomed, ".git"), { recursive: true });
+      try {
+        await api().workspaceRepos();
+        await api().selectRepo(doomed);
+        fs.rmSync(doomed, { recursive: true, force: true });
+        await api().workspaceRepos(); // forced re-scan
+        const a = await api().activeRepoRoot();
+        const b = await api().activeRepoRoot();
+        assert.ok(a === null || fs.existsSync(a), String(a));
+        assert.strictEqual(a, b);
+      } finally {
+        fs.rmSync(doomed, { recursive: true, force: true });
+      }
+    });
+  });
+
   it("ignores hover-link commands called without a valid target", async () => {
     await vscode.commands.executeCommand("gitline.revealCommit", { root: "/nope", sha: "not-a-sha" });
     await vscode.commands.executeCommand("gitline.openCommitPatch");
@@ -230,6 +386,16 @@ describe("Gitline in VS Code", function () {
 });
 
 /** Polls until `done(read())` holds (decorations update on debounced timers), then returns the value. */
+/** Same folder, whatever the spelling (/var vs /private/var, Windows short names). */
+function sameDir(a: string | null | undefined, b: string): boolean {
+  if (!a) return false;
+  try {
+    return fs.realpathSync.native(a) === fs.realpathSync.native(b);
+  } catch {
+    return path.resolve(a) === path.resolve(b);
+  }
+}
+
 async function waitFor<T>(read: () => T | Promise<T>, done: (v: T) => boolean, timeoutMs = 10_000): Promise<T> {
   const start = Date.now();
   for (;;) {
