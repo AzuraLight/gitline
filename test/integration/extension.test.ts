@@ -48,13 +48,13 @@ describe("Gitline in VS Code", function () {
     await vscode.window.showTextDocument(vscode.Uri.file(path.join(repo.root, "pick.txt")));
     const api = vscode.extensions.getExtension<GitlineExports>(EXTENSION_ID)!.exports;
     const root = await api.activeRepoRoot();
-    return root ? fs.realpathSync(root) : null;
+    return root ? fs.realpathSync.native(root) : null;
   }
 
   it("finds the active file's repository (without the Git extension in the no-git-ext run)", async () => {
     const repo = new TempRepo();
     try {
-      assert.strictEqual(await pickedRootFor(repo), fs.realpathSync(repo.root));
+      assert.strictEqual(await pickedRootFor(repo), fs.realpathSync.native(repo.root));
     } finally {
       await vscode.commands.executeCommand("workbench.action.closeAllEditors");
       try { repo.dispose(); } catch { /* Windows may still hold a handle */ }
@@ -67,7 +67,7 @@ describe("Gitline in VS Code", function () {
     const repo = new TempRepo();
     try {
       await git().update("enabled", false, vscode.ConfigurationTarget.Global);
-      assert.strictEqual(await pickedRootFor(repo), fs.realpathSync(repo.root));
+      assert.strictEqual(await pickedRootFor(repo), fs.realpathSync.native(repo.root));
     } finally {
       await git().update("enabled", undefined, vscode.ConfigurationTarget.Global);
       await vscode.commands.executeCommand("workbench.action.closeAllEditors");
