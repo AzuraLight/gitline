@@ -11,6 +11,8 @@
   host, like Git Graph and GitLens, which also covers WSL and Dev Containers. The hard
   dependency on the built-in Git extension is gone too: Gitline still uses its repository list
   when it is there, and finds repositories through git itself when it is not.
+- Right after opening a file from a repository the Git extension had not discovered yet, the
+  graph could show a different repository. Gitline now asks git about that file instead.
 
 ### Internal
 

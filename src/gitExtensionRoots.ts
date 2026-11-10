@@ -33,6 +33,10 @@ export async function tryRootFromBuiltInGit(): Promise<string | null> {
           return root;
         }
       }
+      // The active file is in no repository the Git extension knows (yet — it discovers them
+      // asynchronously). Don't answer with some other repository; let the caller ask git about
+      // the file itself.
+      return null;
     }
     return path.normalize(repos[0].rootUri.fsPath);
   } catch {

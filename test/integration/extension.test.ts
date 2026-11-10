@@ -41,40 +41,6 @@ describe("Gitline in VS Code", function () {
     await vscode.commands.executeCommand("gitline.openCommitGraph");
   });
 
-  /** The repository Gitline picks while a file of `repo` is the active editor. */
-  async function pickedRootFor(repo: TempRepo): Promise<string | null> {
-    repo.write("pick.txt", "x\n");
-    repo.commitAll("pick");
-    await vscode.window.showTextDocument(vscode.Uri.file(path.join(repo.root, "pick.txt")));
-    const api = vscode.extensions.getExtension<GitlineExports>(EXTENSION_ID)!.exports;
-    const root = await api.activeRepoRoot();
-    return root ? fs.realpathSync.native(root) : null;
-  }
-
-  it("finds the active file's repository (without the Git extension in the no-git-ext run)", async () => {
-    const repo = new TempRepo();
-    try {
-      assert.strictEqual(await pickedRootFor(repo), fs.realpathSync.native(repo.root));
-    } finally {
-      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-      try { repo.dispose(); } catch { /* Windows may still hold a handle */ }
-    }
-  });
-
-  it("still finds it when the user turned Git off (git.enabled: false)", async function () {
-    if (process.env.GITLINE_TEST_NO_GIT_EXTENSION === "1") this.skip(); // no git.enabled setting without the extension
-    const git = () => vscode.workspace.getConfiguration("git");
-    const repo = new TempRepo();
-    try {
-      await git().update("enabled", false, vscode.ConfigurationTarget.Global);
-      assert.strictEqual(await pickedRootFor(repo), fs.realpathSync.native(repo.root));
-    } finally {
-      await git().update("enabled", undefined, vscode.ConfigurationTarget.Global);
-      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
-      try { repo.dispose(); } catch { /* Windows may still hold a handle */ }
-    }
-  });
-
   it("registers every contributed command", async () => {
     const registered = await vscode.commands.getCommands(true);
     for (const id of COMMANDS) {
@@ -189,6 +155,42 @@ describe("Gitline in VS Code", function () {
       } catch {
         // see below
       }
+    }
+  });
+
+  // These open a repository file, after which the panel shows that repository's graph — so they
+  // must come after the tests that rely on "no graph shown yet" (the save-refusal tests).
+  /** The repository Gitline picks while a file of `repo` is the active editor. */
+  async function pickedRootFor(repo: TempRepo): Promise<string | null> {
+    repo.write("pick.txt", "x\n");
+    repo.commitAll("pick");
+    await vscode.window.showTextDocument(vscode.Uri.file(path.join(repo.root, "pick.txt")));
+    const api = vscode.extensions.getExtension<GitlineExports>(EXTENSION_ID)!.exports;
+    const root = await api.activeRepoRoot();
+    return root ? fs.realpathSync.native(root) : null;
+  }
+
+  it("finds the active file's repository (without the Git extension in the no-git-ext run)", async () => {
+    const repo = new TempRepo();
+    try {
+      assert.strictEqual(await pickedRootFor(repo), fs.realpathSync.native(repo.root));
+    } finally {
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      try { repo.dispose(); } catch { /* Windows may still hold a handle */ }
+    }
+  });
+
+  it("still finds it when the user turned Git off (git.enabled: false)", async function () {
+    if (process.env.GITLINE_TEST_NO_GIT_EXTENSION === "1") this.skip(); // no git.enabled setting without the extension
+    const git = () => vscode.workspace.getConfiguration("git");
+    const repo = new TempRepo();
+    try {
+      await git().update("enabled", false, vscode.ConfigurationTarget.Global);
+      assert.strictEqual(await pickedRootFor(repo), fs.realpathSync.native(repo.root));
+    } finally {
+      await git().update("enabled", undefined, vscode.ConfigurationTarget.Global);
+      await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+      try { repo.dispose(); } catch { /* Windows may still hold a handle */ }
     }
   });
 
