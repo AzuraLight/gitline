@@ -32,6 +32,7 @@
     selectedRevs: openingRevs(),
     viewRefs: [],      // full refs the host resolved for a multi-branch / pattern selection
     currentBranch: "", // checked-out branch, for Ctrl/Cmd+click starting from HEAD's log
+    layout: saved.layout, // pane widths and collapsed panes; layout.js validates it
     pathFilter: savedString("pathFilter"),
     query: savedString("query"),
     mergesMode: saved.mergesMode === "hide" || saved.mergesMode === "only" ? saved.mergesMode : "all",
@@ -49,6 +50,7 @@
   function saveState() {
     vscode.setState({
       selectedRevs: S.selectedRevs,
+      layout: S.layout,
       pathFilter: S.pathFilter,
       query: S.query,
       mergesMode: S.mergesMode,
@@ -92,6 +94,7 @@
   var menus = GV.createMenus(app);
   var branchTree = GV.createBranchTree(app, menus);
   var commitList = GV.createCommitList(app, detailPane, menus);
+  GV.createLayout(app);
 
   // ---- Toolbar chips & banners ------------------------------------------------------------
 
@@ -429,6 +432,14 @@
     toggleRepoMenu();
   });
   document.addEventListener("click", closeRepoMenu);
+  // Ctrl/Cmd+F: search commits, as in other graph views.
+  document.addEventListener("keydown", function (ev) {
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && (ev.key === "f" || ev.key === "F")) {
+      ev.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
+  });
 
   applyPathFilter();
   applyMergesUi();

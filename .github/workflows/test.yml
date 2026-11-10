@@ -41,3 +41,9 @@ jobs:
       - name: integration tests
         if: runner.os != 'Linux'
         run: npm run test:integration
+
+      # The oldest VS Code that engines.vscode allows — catches APIs or webview features newer than
+      # what we claim to support. One OS is enough for that.
+      - name: integration tests on the minimum supported VS Code (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration:minimum

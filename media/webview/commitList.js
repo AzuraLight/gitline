@@ -14,6 +14,41 @@
     var svg = document.getElementById("graph-svg");
     var canvas = root.parentElement;
     var scrollHandler = null;
+    var activeList = null; // the mounted list's selection API (rebuilt on every render)
+
+    // ---- Keyboard: the commit list is one listbox ---------------------------------------------
+    root.setAttribute("role", "listbox");
+    root.setAttribute("tabindex", "0");
+    root.setAttribute("aria-label", UI.commitListAria || "Commits");
+    root.addEventListener("keydown", function (ev) {
+      var L = activeList;
+      if (!L || !L.count) return;
+      var cur = L.selectedIndex();
+      var mod = ev.ctrlKey || ev.metaKey;
+      var next = -1;
+      if (mod && ev.key === "ArrowDown") next = cur >= 0 ? L.parentIndex(cur) : -1;
+      else if (mod && ev.key === "ArrowUp") next = cur >= 0 ? L.childIndex(cur) : -1;
+      else if (!mod && !ev.altKey) next = GV.commitNav.stepIndex(cur, ev.key, L.count, L.pageRows());
+      if (next >= 0) {
+        ev.preventDefault();
+        L.selectIndex(next, true);
+        if (next >= L.count - BUFFER) app.loadMore();
+        return;
+      }
+      if ((ev.key === "Enter" || ev.key === " ") && cur >= 0) {
+        ev.preventDefault();
+        L.selectIndex(cur, true);
+        return;
+      }
+      // Context menu from the keyboard (Shift+F10 / the Menu key), placed at the row.
+      if ((ev.key === "ContextMenu" || (ev.shiftKey && ev.key === "F10")) && cur >= 0) {
+        ev.preventDefault();
+        L.selectIndex(cur, true);
+        var el = L.rowEl(cur);
+        var r = el ? el.getBoundingClientRect() : root.getBoundingClientRect();
+        menus.forCommit(L.commit(cur), r.left + 40, r.top + r.height);
+      }
+    });
 
     function formatWorkingSummary(w) {
       var parts = [];
@@ -73,14 +108,35 @@
       return count;
     }
 
+    /**
+     * The row's ref labels, grouped (local + same-named remote folded, origin/HEAD dropped) and
+     * capped: overflow becomes one "+N" chip whose tooltip lists everything. The labels share at
+     * most part of the row (CSS), so the commit message always keeps room.
+     */
     function refChips(refs) {
-      var frag = document.createDocumentFragment();
-      (refs || []).forEach(function (r) {
-        var chip = u.el("span", "gv-ref-chip gv-ref-chip--" + r.kind, r.label);
-        chip.title = r.kind + ": " + r.label;
-        frag.appendChild(chip);
+      var R = GV.refChips;
+      var chips = R.groupRefs(refs);
+      var box = u.el("span", "gv-ref-chips");
+      if (!chips.length) return box;
+      var parts = R.splitInline(chips);
+      parts.shown.forEach(function (c) {
+        var chip = u.el("span", "gv-ref-chip gv-ref-chip--" + c.kind);
+        chip.appendChild(u.el("span", "gv-ref-chip__text", c.label));
+        if (c.remotes.length) {
+          chip.classList.add("gv-ref-chip--synced");
+          chip.appendChild(u.el("span", "gv-ref-chip__remote", "⇄"));
+        }
+        chip.title = R.describe(c);
+        box.appendChild(chip);
       });
-      return frag;
+      if (parts.hidden.length) {
+        var more = u.el("span", "gv-ref-chip gv-ref-chip--more",
+          (UI.moreRefsLabel || "+{0}").replace("{0}", String(parts.hidden.length)));
+        more.title = parts.hidden.map(R.describe).join("\n");
+        box.appendChild(more);
+      }
+      box.title = chips.map(R.describe).join("\n");
+      return box;
     }
 
     function buildCommitCell(c, color) {
@@ -128,6 +184,8 @@
     function render(payload) {
       clearScrollHandler();
       root.innerHTML = "";
+      activeList = null;
+      root.removeAttribute("aria-activedescendant");
       var commits = payload.commits || [];
       if (!commits.length) return false;
 
@@ -150,14 +208,63 @@
       root.appendChild(list);
       var rendered = {}; // index → element
 
+      var indexOfHash = {};
+      commits.forEach(function (c, i) { indexOfHash[c.hash] = i; });
+
+      /** Selects row i like a click: highlight, graph ring, detail pane. scroll: bring it into view. */
+      function selectIndex(i, scroll) {
+        var c = commits[i];
+        if (!c) return;
+        if (scroll) {
+          var top = graphOffset + i * ROW_H;
+          if (top < canvas.scrollTop) canvas.scrollTop = top;
+          else if (top + ROW_H > canvas.scrollTop + canvas.clientHeight) canvas.scrollTop = top + ROW_H - canvas.clientHeight;
+          update(); // rows are virtual: make sure row i exists before pointing at it
+        }
+        Object.keys(rendered).forEach(function (k) {
+          rendered[k].classList.remove("gv-unified-row--selected");
+          rendered[k].setAttribute("aria-selected", "false");
+        });
+        if (rendered[i]) {
+          rendered[i].classList.add("gv-unified-row--selected");
+          rendered[i].setAttribute("aria-selected", "true");
+          root.setAttribute("aria-activedescendant", rendered[i].id);
+        }
+        GV.graphSvg.highlightNode(svg, layout.perRow[i].lane, i, METRICS);
+        detailPane.showCommit(c);
+      }
+
+      function selectedIndex() {
+        var i = indexOfHash[S.currentHash];
+        return typeof i === "number" ? i : -1;
+      }
+
+      activeList = {
+        selectIndex: selectIndex,
+        selectedIndex: selectedIndex,
+        count: commits.length,
+        pageRows: function () { return Math.max(1, Math.floor(canvas.clientHeight / ROW_H) - 1); },
+        parentIndex: function (i) { return GV.commitNav.parentIndex(commits, i, indexOfHash); },
+        childIndex: function (i) { return GV.commitNav.childIndex(commits, i); },
+        rowEl: function (i) { return rendered[i]; },
+        commit: function (i) { return commits[i]; },
+      };
+
       function buildRow(i) {
         var c = commits[i];
         var lane = layout.perRow[i].lane;
         var row = u.el("div", "gv-unified-row gv-commit-log-row gv-row-click");
-        row.setAttribute("role", "button");
+        row.setAttribute("role", "option");
+        row.id = "gv-commit-row-" + i;
         row.dataset.hash = c.hash;
         sizeRow(row, graphWidth);
-        if (c.hash === S.currentHash) row.classList.add("gv-unified-row--selected");
+        var isSel = c.hash === S.currentHash;
+        row.setAttribute("aria-selected", isSel ? "true" : "false");
+        if (isSel) {
+          row.classList.add("gv-unified-row--selected");
+          // After a refresh / next page the selected row is rebuilt: point the listbox at it again.
+          root.setAttribute("aria-activedescendant", row.id);
+        }
         if (S.markedHash && c.hash === S.markedHash) row.classList.add("gv-unified-row--marked");
         if (c.offHead) {
           // Dimming is visual only; screen readers get the same fact as a description.
@@ -166,10 +273,9 @@
         }
         row.appendChild(buildCommitCell(c, u.laneColor(lane)));
         row.addEventListener("click", function () {
-          Object.keys(rendered).forEach(function (k) { rendered[k].classList.remove("gv-unified-row--selected"); });
-          row.classList.add("gv-unified-row--selected");
-          GV.graphSvg.highlightNode(svg, lane, i, METRICS);
-          detailPane.showCommit(c);
+          selectIndex(i, false);
+          // Keys work right after a click: the list (not the row) holds focus, like a listbox.
+          root.focus({ preventScroll: true });
         });
         row.addEventListener("contextmenu", function (ev) {
           ev.preventDefault();
@@ -190,6 +296,8 @@
       function syncRows(r) {
         Object.keys(rendered).forEach(function (k) {
           if (k < r.start || k > r.end) {
+            // The listbox must not point at a row that is leaving the DOM (virtual scrolling).
+            if (root.getAttribute("aria-activedescendant") === rendered[k].id) root.removeAttribute("aria-activedescendant");
             list.removeChild(rendered[k]);
             delete rendered[k];
           }
@@ -228,6 +336,8 @@
     function clear() {
       clearScrollHandler();
       root.innerHTML = "";
+      activeList = null;
+      root.removeAttribute("aria-activedescendant");
     }
 
     /** Toggle the "marked for compare" style on rows currently in the DOM. */

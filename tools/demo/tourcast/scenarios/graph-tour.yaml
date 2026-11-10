@@ -1,5 +1,5 @@
 # README GIF 1 — browse history: a merge, a branch's own history, back to HEAD, all branches,
-# several branches, scroll.
+# several branches, collapsing a pane, scroll.
 #   node tools/demo/build.js list
 #   tourcast record tools/demo/tourcast/scenarios/graph-tour.yaml -o out-demo/graph-tour.mp4
 version: 1
@@ -64,6 +64,16 @@ steps:
     caption: Ctrl/Cmd+click or Ctrl/Cmd+Enter adds a branch
   - wait_ready: multi_view
     hold: 1.8
+
+  # Panes collapse from their header chevron (and the dividers drag to resize).
+  - click: pane.preview_toggle
+    caption: Collapse the preview to give the graph room
+  - wait_ready: preview_collapsed
+    hold: 1.4
+  - click: pane.preview_toggle
+    caption: Open it again
+  - wait_ready: preview_open
+    hold: 0.8
 
   - scroll: { to: bottom, in: graph.canvas, duration: 2.0, easing: out_quad }
     caption: Older history loads as you scroll

@@ -16,7 +16,7 @@ import { ALL_REFS } from "./viewSelection";
 const execFileAsync = promisify(execFile);
 
 /** Network operations (pull/push/fetch) give up after this long instead of hanging the panel. */
-export const NETWORK_TIMEOUT_MS = 120_000;
+const NETWORK_TIMEOUT_MS = 120_000;
 
 /** input: written to git's stdin (e.g. revisions for `--stdin`, which has no command-line length limit). */
 type ExecOptions = { maxBuffer?: number; timeoutMs?: number; input?: string };
@@ -138,7 +138,7 @@ export async function revExists(cwd: string, rev: string): Promise<boolean> {
 }
 
 /** Full hash of the commit `rev` points to, or null when it does not resolve. */
-export async function resolveCommit(cwd: string, rev: string): Promise<string | null> {
+async function resolveCommit(cwd: string, rev: string): Promise<string | null> {
   const out = await tryGit(cwd, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`]);
   const hash = out?.trim() ?? "";
   return hash.length > 0 ? hash : null;
@@ -224,36 +224,40 @@ export async function readBranchTreePayload(cwd: string): Promise<GitBranchTreeP
 const COMMIT_RECORD_SEP = "\x1f";
 const COMMIT_FORMAT = ["%H", "%P", "%s", "%an", "%ct", "%D"].join("%x1e") + "%x1f";
 
-function parseDecorate(decorate: string): GitCommitRef[] {
+/**
+ * `%D` with `--decorate=full`, e.g. "HEAD -> refs/heads/main, refs/remotes/origin/main, tag: refs/tags/v1".
+ * Full names are what tell a local `feature/x` from a remote `origin/x`: with short names both
+ * contain a "/" and local branches were shown as remote ones.
+ */
+export function parseDecorate(decorate: string): GitCommitRef[] {
   const out: GitCommitRef[] = [];
-  const raw = decorate.trim();
-  if (!raw) {
-    return out;
-  }
-  for (const piece of raw.split(",")) {
-    const item = piece.trim();
-    if (!item) {
-      continue;
-    }
-    // "HEAD -> main" → emit HEAD + the branch
+  // git joins decorations with ", ". A ref name may contain a comma but never a space, so
+  // splitting on ", " keeps a branch like "a,b" whole.
+  for (const piece of decorate.split(", ")) {
+    let item = piece.trim();
+    if (!item) continue;
+    let kind: GitCommitRef["kind"] | undefined;
     const arrow = item.match(/^HEAD\s*->\s*(.+)$/);
     if (arrow) {
-      out.push({ label: arrow[1].trim(), kind: "head" });
-      continue;
-    }
-    if (item === "HEAD") {
+      item = arrow[1].trim();
+      kind = "head";
+    } else if (item === "HEAD") {
       out.push({ label: "HEAD", kind: "head" });
       continue;
+    } else if (item.startsWith("tag: ")) {
+      item = item.slice(5).trim();
+      kind = "tag";
     }
-    if (item.startsWith("tag: ")) {
-      out.push({ label: item.slice(5).trim(), kind: "tag" });
-      continue;
+    if (item.startsWith("refs/heads/")) {
+      out.push({ label: item.slice("refs/heads/".length), kind: kind ?? "local" });
+    } else if (item.startsWith("refs/remotes/")) {
+      out.push({ label: item.slice("refs/remotes/".length), kind: kind ?? "remote" });
+    } else if (item.startsWith("refs/tags/")) {
+      out.push({ label: item.slice("refs/tags/".length), kind: "tag" });
+    } else {
+      // refs/stash, refs/notes/…, or a short name from a git that ignored --decorate=full.
+      out.push({ label: item.replace(/^refs\//, ""), kind: kind ?? "other" });
     }
-    if (item.includes("/")) {
-      out.push({ label: item, kind: "remote" });
-      continue;
-    }
-    out.push({ label: item, kind: "local" });
   }
   return out;
 }
@@ -410,7 +414,7 @@ export async function readRecentCommits(
   } else {
     logArgs.push(...revArgs(target));
   }
-  logArgs.push(`--max-count=${limit}`, `--pretty=format:${COMMIT_FORMAT}`, "--topo-order");
+  logArgs.push(`--max-count=${limit}`, "--decorate=full", `--pretty=format:${COMMIT_FORMAT}`, "--topo-order");
   if (mergesMode === "hide") {
     logArgs.push("--no-merges");
   } else if (mergesMode === "only") {
@@ -443,7 +447,7 @@ export async function readRecentCommits(
     const hash = await resolveCommit(cwd, q);
     if (hash && !rows.some((r) => r.hash === hash)) {
       const hit = parseCommitRows(
-        await execGit(cwd, ["log", "--max-count=1", `--pretty=format:${COMMIT_FORMAT}`, hash]),
+        await execGit(cwd, ["log", "--max-count=1", "--decorate=full", `--pretty=format:${COMMIT_FORMAT}`, hash]),
       );
       rows.unshift(...hit);
     }

@@ -59,7 +59,6 @@
   "Pick another branch in the sidebar, or clear the search filter.": "Pick another branch in the sidebar, or clear the search filter.",
   "Pop {0} (apply and drop)?": "Pop {0} (apply and drop)?",
   "Preview": "Preview",
-  "Push {0} to origin?": "Push {0} to origin?",
   "Rebase current branch onto {0}?": "Rebase current branch onto {0}?",
   "Rebase the current branch onto {0}?": "Rebase the current branch onto {0}?",
   "Remote: {0}": "Remote: {0}",
@@ -126,5 +125,15 @@
   "Dismiss": "Dismiss",
   "A rebase is paused. Resolve conflicts in the SCM view, then continue.": "A rebase is paused. Resolve conflicts in the SCM view, then continue.",
   "Continue": "Continue",
-  "Skip": "Skip"
+  "Skip": "Skip",
+  "Merge commit filters": "Merge commit filters",
+  "Pull, push and fetch": "Pull, push and fetch",
+  "Filter branches": "Filter branches",
+  "No branch matches “{0}”": "No branch matches “{0}”",
+  "Resize the branch list": "Resize the branch list",
+  "Resize the preview": "Resize the preview",
+  "Drag or use ←/→ to resize · double-click to reset · Enter to collapse": "Drag or use ←/→ to resize · double-click to reset · Enter to collapse",
+  "Collapse or expand: {0}": "Collapse or expand: {0}",
+  "+{0}": "+{0}",
+  "Commits — ↑/↓ to move, Ctrl/Cmd+↓/↑ to follow parent/child, Enter to open": "Commits — ↑/↓ to move, Ctrl/Cmd+↓/↑ to follow parent/child, Enter to open"
 }

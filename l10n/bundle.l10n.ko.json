@@ -59,7 +59,6 @@
   "Pick another branch in the sidebar, or clear the search filter.": "사이드바에서 다른 브랜치를 고르거나 검색 필터를 해제하세요.",
   "Pop {0} (apply and drop)?": "{0}을(를) pop 할까요? (적용 후 삭제)",
   "Preview": "미리보기",
-  "Push {0} to origin?": "{0}을(를) origin에 push 할까요?",
   "Rebase current branch onto {0}?": "현재 브랜치를 {0} 위로 rebase 할까요?",
   "Rebase the current branch onto {0}?": "현재 브랜치를 {0} 위로 rebase 할까요?",
   "Remote: {0}": "리모트: {0}",
@@ -126,5 +125,15 @@
   "Skip the current commit and continue the rebase?": "현재 커밋을 건너뛰고 리베이스를 계속할까요?",
   "Abort the in-progress rebase?": "진행 중인 리베이스를 중단할까요?",
   "{0} → {1} ({2}..{3})": "{0} → {1} ({2}..{3})",
-  "{0} ({1}..{2})": "{0} ({1}..{2})"
+  "{0} ({1}..{2})": "{0} ({1}..{2})",
+  "Merge commit filters": "병합 커밋 필터",
+  "Pull, push and fetch": "Pull, Push, Fetch",
+  "Filter branches": "브랜치 검색",
+  "No branch matches “{0}”": "“{0}”에 맞는 브랜치가 없습니다",
+  "Resize the branch list": "브랜치 목록 크기 조절",
+  "Resize the preview": "미리보기 크기 조절",
+  "Drag or use ←/→ to resize · double-click to reset · Enter to collapse": "드래그하거나 ←/→로 크기 조절 · 더블클릭으로 초기화 · Enter로 접기",
+  "Collapse or expand: {0}": "접기/펴기: {0}",
+  "+{0}": "+{0}",
+  "Commits — ↑/↓ to move, Ctrl/Cmd+↓/↑ to follow parent/child, Enter to open": "커밋 — ↑/↓로 이동, Ctrl/Cmd+↓/↑로 부모/자식 따라가기, Enter로 열기"
 }

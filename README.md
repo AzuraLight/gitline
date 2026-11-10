@@ -9,7 +9,7 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
   <img src="docs/images/graph-dark.png" alt="Gitline commit graph in the All branches view: branch sidebar, colored lanes with merges, an unmerged branch dimmed, and the changed files of the selected merge commit">
 </picture>
 
-![Opening a merge commit, showing one branch's history, switching to all branches with unmerged commits dimmed, adding a second branch to the view, then scrolling older history](docs/images/graph-tour.gif)
+![Opening a merge commit, showing one branch's history, switching to all branches with unmerged commits dimmed, adding a second branch to the view, collapsing the preview, then scrolling older history](docs/images/graph-tour.gif)
 
 ## Why Gitline
 
@@ -23,9 +23,11 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 ### Commit graph (panel)
 
 - **SVG lane graph** — color-coded branches with smooth bezier merges.
-- **Ref chips** inline next to each commit: `HEAD`, local, remote, tag.
+- **Ref labels** next to each commit: `HEAD`, tags, local and remote branches. A local branch and its remote at the same commit share one label (`main ⇄`); past two labels the rest fold into `+N` (hover for the list), so the message stays readable.
+- **Resizable, collapsible panes** — collapse the branch list, the graph or the preview from the chevron in its header; drag the dividers (or focus one and use ←/→, Enter to collapse, double-click to reset). Sizes are remembered. In a narrow graph pane, author, time and hash give way to the message.
+- **Keyboard** — ↑/↓, Page Up/Down, Home/End move through commits; <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+↓/↑ follow the first parent / child; <kbd>Shift</kbd>+<kbd>F10</kbd> opens the commit menu; <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>F</kbd> searches.
 - **All branches** — one graph of every local and remote branch and tag. Commits that are not on your current branch (not reachable from `HEAD`) are dimmed, so unmerged work stands out. Clicking a single branch dims the same way; **HEAD (default log)** shows just the current branch.
-- **Pick several branches** — <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+click (or <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Enter</kbd>) branches in the sidebar to show just those, e.g. your teammates' branches. The header reads `repo · 3 branches`; hover it for the list.
+- **Pick several branches** — <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+click (or <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Enter</kbd>) branches in the sidebar to show just those, e.g. your teammates' branches. The header reads `repo · 3 branches`; hover it for the list. The filter box above the list narrows long branch lists (`origin/`, `chore`, …).
 - **Default view** — open Gitline on the current branch, all branches, or a list of branches and patterns such as `origin/team/*` (see [Settings](#settings)). Set it up by picking branches and running **Gitline: Save Current View as Default**.
 - **Search bar** — text, `@author`, or a full / partial SHA (the matching commit is listed first). 280 ms debounce, server-side `git log --grep` / `--author`.
 - **File-level history** — open the graph filtered to a single file (`--follow` for renames). Editor title bar button + explorer context menu.

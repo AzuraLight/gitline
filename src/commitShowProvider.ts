@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { errorMessage } from "./errors";
 import { readBlobAt, readCommitShow, readCompareShow } from "./gitExec";
 
 export function commitShowUri(repoRoot: string, sha: string): vscode.Uri {
@@ -62,7 +63,7 @@ export function registerCommitShowProvider(): vscode.Disposable {
         try {
           return await readCompareShow(root, a, b);
         } catch (e: unknown) {
-          const msg = e instanceof Error ? e.message : String(e);
+          const msg = errorMessage(e);
           return vscode.l10n.t("// Gitline: git diff failed\n// {0}", msg);
         }
       }
@@ -73,7 +74,7 @@ export function registerCommitShowProvider(): vscode.Disposable {
       try {
         return await readCommitShow(root, sha);
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorMessage(e);
         return vscode.l10n.t("// Gitline: git show failed\n// {0}", msg);
       }
     },

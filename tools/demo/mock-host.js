@@ -65,9 +65,15 @@
     return null;
   }
   // Refs for the commits that carry them.
-  byHash(tips.main).refs.push({ kind: "head", label: "HEAD" }, { kind: "branch", label: "main" }, { kind: "remote", label: "origin/main" });
-  byHash(tips["feature/search"]).refs.push({ kind: "branch", label: "feature/search" });
-  byHash(releaseHash).refs.push({ kind: "tag", label: "v1.4.0" });
+  // Same shapes the extension sends (gitExec parseDecorate): "HEAD -> main" is one head ref.
+  byHash(tips.main).refs.push({ kind: "head", label: "main" }, { kind: "remote", label: "origin/main" },
+    { kind: "remote", label: "origin/HEAD" });
+  byHash(tips["feature/search"]).refs.push({ kind: "local", label: "feature/search" },
+    { kind: "remote", label: "origin/feature/search" });
+  // A busy commit: a tag, release branches and a teammate's remote branch all on one row.
+  byHash(releaseHash).refs.push({ kind: "tag", label: "v1.4.0" }, { kind: "local", label: "release/1.4" },
+    { kind: "remote", label: "origin/release/1.4" }, { kind: "remote", label: "upstream/release/1.4-hotfix-candidate" },
+    { kind: "local", label: "hotfix/checkout-rounding" });
 
   function reachableFrom(tip) {
     var seen = {};
@@ -211,7 +217,7 @@
       },
       // Lets a test page start from saved webview state (e.g. a pre-1.5 `selectedRev`).
       getState: function () { return window.__GV_DEMO_STATE__ || null; },
-      setState: function () {},
+      setState: function (s) { window.__GV_DEMO_SAVED__ = s; }, // a test page can read it back
     };
   };
 })();

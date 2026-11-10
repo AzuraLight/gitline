@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { errorMessage } from "./errors";
 import { buildCommitGraphShellHtml } from "./commitGraphView";
 import { commitFileUri, commitShowUri, compareShowUri } from "./commitShowProvider";
 import {
@@ -43,6 +44,7 @@ import {
   abortRebase,
   continueRebase,
   isRebaseInProgress,
+  runRebaseStep,
   readRebaseCommits,
   resolveRebaseBase,
   runInteractiveRebase,
@@ -214,7 +216,7 @@ async function reportAndReload(
     await task();
     webview.postMessage({ type: "reloadNow" });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessage(e);
     void vscode.window.showErrorMessage(vscode.l10n.t("Gitline: {0}", msg));
   }
 }
@@ -462,7 +464,7 @@ async function sendGraphPayload(
       },
     });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessage(e);
     webview.postMessage({ type: "graphError", code: "git", message: msg });
   }
 }
@@ -474,7 +476,7 @@ async function sendStashFiles(webview: vscode.Webview, ref: string): Promise<voi
     const files = await readStashFiles(root, ref);
     webview.postMessage({ type: "stashFiles", ref, files });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessage(e);
     webview.postMessage({ type: "stashFilesError", ref, message: msg });
   }
 }
@@ -510,7 +512,7 @@ async function sendRebaseCommits(webview: vscode.Webview, base: string): Promise
     const commits = await readRebaseCommits(root, await resolveRebaseBase(root, base));
     webview.postMessage({ type: "rebaseCommits", base, commits });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessage(e);
     webview.postMessage({ type: "rebaseError", message: msg });
   }
 }
@@ -544,7 +546,7 @@ async function applyRebase(
     webview.postMessage({ type: "rebaseDone" });
     webview.postMessage({ type: "reloadNow" });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessage(e);
     if (await isRebaseInProgress(root)) {
       webview.postMessage({
         type: "rebaseError",
@@ -559,50 +561,19 @@ async function applyRebase(
 async function continueRebaseAndReload(webview: vscode.Webview): Promise<void> {
   const root = await getActiveRepoRoot();
   if (!root) return;
-  if (!(await isRebaseInProgress(root))) {
-    webview.postMessage({ type: "rebaseDone" });
-    webview.postMessage({ type: "reloadNow" });
-    return;
-  }
-  try {
-    await continueRebase(root);
-    if (await isRebaseInProgress(root)) {
-      webview.postMessage({
-        type: "rebaseError",
-        message: vscode.l10n.t("Still paused — there are unresolved conflicts. Resolve them in the SCM view, then continue again."),
-      });
-    } else {
-      webview.postMessage({ type: "rebaseDone" });
-    }
-    webview.postMessage({ type: "reloadNow" });
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    webview.postMessage({ type: "rebaseError", message: msg });
-    webview.postMessage({ type: "reloadNow" });
-  }
+  await runRebaseStep(root, continueRebase, (m) => void webview.postMessage(m), {
+    stillPausedMessage: vscode.l10n.t("Still paused — there are unresolved conflicts. Resolve them in the SCM view, then continue again."),
+  });
 }
 
 async function skipRebaseAndReload(webview: vscode.Webview): Promise<void> {
   const root = await getActiveRepoRoot();
   if (!root) return;
-  if (!(await isRebaseInProgress(root))) {
-    webview.postMessage({ type: "rebaseDone" });
-    webview.postMessage({ type: "reloadNow" });
-    return;
-  }
-  const yes = await confirm(vscode.l10n.t("Skip the current commit and continue the rebase?"), true);
-  if (!yes) return;
-  try {
-    await skipRebase(root);
-    if (!(await isRebaseInProgress(root))) {
-      webview.postMessage({ type: "rebaseDone" });
-    }
-    webview.postMessage({ type: "reloadNow" });
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
-    webview.postMessage({ type: "rebaseError", message: msg });
-    webview.postMessage({ type: "reloadNow" });
-  }
+  await runRebaseStep(root, skipRebase, (m) => void webview.postMessage(m), {
+    confirm: () => confirm(vscode.l10n.t("Skip the current commit and continue the rebase?"), true),
+    // Skipping onto the next conflicting commit is the same situation as continuing into one.
+    stillPausedMessage: vscode.l10n.t("Still paused — there are unresolved conflicts. Resolve them in the SCM view, then continue again."),
+  });
 }
 
 async function abortRebaseAndReload(webview: vscode.Webview): Promise<void> {
@@ -619,7 +590,7 @@ async function abortRebaseAndReload(webview: vscode.Webview): Promise<void> {
     webview.postMessage({ type: "rebaseDone" });
     webview.postMessage({ type: "reloadNow" });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessage(e);
     webview.postMessage({ type: "rebaseError", message: msg });
   }
 }
@@ -631,7 +602,7 @@ async function sendCompareFiles(webview: vscode.Webview, a: string, b: string): 
     const files = await readCompareFiles(root, a, b);
     webview.postMessage({ type: "compareFiles", a, b, files });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessage(e);
     webview.postMessage({ type: "compareFilesError", a, b, message: msg });
   }
 }
@@ -688,7 +659,7 @@ async function sendCommitFiles(webview: vscode.Webview, hash: string): Promise<v
     const files = await readCommitFiles(root, hash);
     webview.postMessage({ type: "commitFiles", hash, files });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = errorMessage(e);
     webview.postMessage({ type: "commitFilesError", hash, message: msg });
   }
 }
@@ -897,10 +868,6 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
           }
           if (msg?.type === "openCommitPatch" && typeof msg.hash === "string") {
             void openCommitPreview(msg.hash);
-            return;
-          }
-          if (msg?.type === "previewCommit" && typeof msg.hash === "string") {
-            // Reserved for legacy callers; the preview pane now shows files instead.
             return;
           }
           if (

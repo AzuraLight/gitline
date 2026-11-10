@@ -18,6 +18,16 @@ export type CommitGraphWebviewUi = {
   commitNotOnHead: string;
   headerBranchCount: string;
   branchMultiSelectHint: string;
+  mergesGroupAria: string;
+  syncGroupAria: string;
+  branchFilterPlaceholder: string;
+  branchFilterNoMatch: string;
+  resizeSidebarAria: string;
+  resizePreviewAria: string;
+  resizeHint: string;
+  togglePaneTitle: string;
+  moreRefsLabel: string;
+  commitListAria: string;
   branchGroupLocal: string;
   branchGroupRemote: string;
   paneLogAria: string;
@@ -85,6 +95,16 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     commitNotOnHead: vscode.l10n.t("Not on the current branch"),
     headerBranchCount: vscode.l10n.t("{0} branches"),
     branchMultiSelectHint: vscode.l10n.t("Ctrl/Cmd+click to add to the view"),
+    mergesGroupAria: vscode.l10n.t("Merge commit filters"),
+    syncGroupAria: vscode.l10n.t("Pull, push and fetch"),
+    branchFilterPlaceholder: vscode.l10n.t("Filter branches"),
+    branchFilterNoMatch: vscode.l10n.t("No branch matches “{0}”"),
+    resizeSidebarAria: vscode.l10n.t("Resize the branch list"),
+    resizePreviewAria: vscode.l10n.t("Resize the preview"),
+    resizeHint: vscode.l10n.t("Drag or use ←/→ to resize · double-click to reset · Enter to collapse"),
+    togglePaneTitle: vscode.l10n.t("Collapse or expand: {0}"),
+    moreRefsLabel: vscode.l10n.t("+{0}"),
+    commitListAria: vscode.l10n.t("Commits — ↑/↓ to move, Ctrl/Cmd+↓/↑ to follow parent/child, Enter to open"),
     branchGroupLocal: vscode.l10n.t("Local"),
     branchGroupRemote: vscode.l10n.t("Remote: {0}"),
     paneLogAria: vscode.l10n.t("Graph and commit list"),

@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { promisify } from "util";
+import { errorMessage } from "./errors";
 import { revExists, runGitCommand } from "./gitExec";
 
 const execFileAsync = promisify(execFile);
@@ -171,4 +172,47 @@ export async function skipRebase(cwd: string): Promise<void> {
 
 export async function abortRebase(cwd: string): Promise<void> {
   await runGitCommand(cwd, ["rebase", "--abort"]);
+}
+
+/** What a rebase step reports to the panel. */
+export type RebaseStepMessage =
+  | { type: "rebaseDone" }
+  | { type: "rebaseError"; message: string }
+  | { type: "reloadNow" };
+
+/**
+ * One step of a paused rebase (continue / skip): nothing to do if no rebase is running; otherwise
+ * ask (if `confirm` is given — a "no" changes nothing), run it, and report from the *state* git is
+ * left in, not from its exit code: `git rebase --continue/--skip` exits non-zero when it stops on
+ * the next conflict, which is the normal "still paused" case, not a failure.
+ * - no rebase any more → done (or the error, if the step failed and the rebase is gone);
+ * - still paused → `stillPausedMessage` plus git's detail (which file conflicts), else the raw error.
+ * Always asks for a reload. No VS Code here: the panel passes how to post and how to ask.
+ */
+export async function runRebaseStep(
+  root: string,
+  step: (root: string) => Promise<unknown>,
+  post: (m: RebaseStepMessage) => void,
+  opts: { confirm?: () => Promise<boolean>; stillPausedMessage?: string } = {},
+): Promise<void> {
+  if (!(await isRebaseInProgress(root))) {
+    post({ type: "rebaseDone" });
+    post({ type: "reloadNow" });
+    return;
+  }
+  if (opts.confirm && !(await opts.confirm())) return;
+  let failure: string | undefined;
+  try {
+    await step(root);
+  } catch (e: unknown) {
+    failure = errorMessage(e);
+  }
+  if (!(await isRebaseInProgress(root))) {
+    post(failure === undefined ? { type: "rebaseDone" } : { type: "rebaseError", message: failure });
+  } else if (opts.stillPausedMessage) {
+    post({ type: "rebaseError", message: failure ? `${opts.stillPausedMessage}\n${failure}` : opts.stillPausedMessage });
+  } else if (failure !== undefined) {
+    post({ type: "rebaseError", message: failure });
+  }
+  post({ type: "reloadNow" });
 }

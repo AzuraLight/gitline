@@ -197,6 +197,88 @@
         }), "gv-ref-item__btn--remote", cur));
       });
       restore(snap);
+      applyFilter();
+    }
+
+    // ---- Filter box --------------------------------------------------------------------------
+    // Case-insensitive substring match on the full name, so "origin/" narrows to one remote and
+    // "chore" to every chore/… branch. HEAD and All branches stay; folders without a match hide
+    // and folders with one open — and go back to how the user had them once the filter is cleared.
+
+    var filterInput = document.getElementById("branch-filter");
+    var filterQuery = "";
+    var openBeforeFilter = null; // folder title → open, taken when a filter starts
+
+    function folderTitle(d) {
+      var s = d.querySelector("summary");
+      return s ? s.textContent : "";
+    }
+
+    function applyFilter() {
+      if (!rootEl) return;
+      var q = filterQuery.trim().toLowerCase();
+      var folders = rootEl.querySelectorAll("details.gv-ref-folder");
+      var anyMatch = false;
+      Array.prototype.forEach.call(folders, function (d) {
+        var hits = 0;
+        Array.prototype.forEach.call(d.querySelectorAll(".gv-ref-item"), function (li) {
+          var btn = li.querySelector("[data-rev]");
+          var name = btn ? btn.getAttribute("data-rev").toLowerCase() : "";
+          var show = !q || name.indexOf(q) >= 0;
+          li.hidden = !show;
+          if (show) hits++;
+        });
+        d.hidden = !!q && hits === 0;
+        if (q && hits) d.open = true;
+        if (hits) anyMatch = true;
+      });
+      var empty = rootEl.querySelector(".gv-ref-filter-empty");
+      if (q && !anyMatch) {
+        if (!empty) {
+          empty = u.el("div", "gv-ref-filter-empty");
+          empty.setAttribute("role", "status");
+          rootEl.appendChild(empty);
+        }
+        empty.textContent = (UI.branchFilterNoMatch || "No branch matches “{0}”").replace("{0}", filterQuery.trim());
+      } else if (empty) {
+        empty.parentNode.removeChild(empty);
+      }
+    }
+
+    function setFilter(value) {
+      var was = filterQuery.trim();
+      filterQuery = value;
+      if (!was && value.trim()) {
+        openBeforeFilter = {};
+        Array.prototype.forEach.call(rootEl.querySelectorAll("details.gv-ref-folder"), function (d) {
+          openBeforeFilter[folderTitle(d)] = d.open;
+        });
+      }
+      applyFilter();
+      if (was && !value.trim() && openBeforeFilter) {
+        Array.prototype.forEach.call(rootEl.querySelectorAll("details.gv-ref-folder"), function (d) {
+          var t = folderTitle(d);
+          if (Object.prototype.hasOwnProperty.call(openBeforeFilter, t)) d.open = openBeforeFilter[t];
+        });
+        openBeforeFilter = null;
+      }
+    }
+
+    if (filterInput) {
+      filterInput.addEventListener("input", function () { setFilter(filterInput.value); });
+      filterInput.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape" && filterInput.value) {
+          ev.preventDefault();
+          filterInput.value = "";
+          setFilter("");
+        } else if (ev.key === "ArrowDown") {
+          var first = rootEl.querySelector(".gv-ref-item:not([hidden]) [data-rev]");
+          if (first) {
+            ev.preventDefault();
+            first.focus();
+          }
+        }
+      });
     }
 
     return { render: render };

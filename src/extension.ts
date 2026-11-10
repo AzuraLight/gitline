@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { errorMessage } from "./errors";
 import { InlineBlame, type CommitTarget } from "./blame/inlineBlame";
 import { commitShowUri, registerCommitShowProvider } from "./commitShowProvider";
 import { repoRelativePath, resolveRepoRootForFile } from "./gitExec";
@@ -27,7 +28,7 @@ export function activate(context: vscode.ExtensionContext): GitlineExports {
     try {
       await revealCommitPanelAndReload();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorMessage(e);
       void vscode.window.showErrorMessage(vscode.l10n.t("Gitline: Could not open the commit panel: {0}", msg));
     }
   });
@@ -53,7 +54,7 @@ export function activate(context: vscode.ExtensionContext): GitlineExports {
       try {
         await revealCommitPanelWithPath(rel);
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = errorMessage(e);
         void vscode.window.showErrorMessage(vscode.l10n.t("Gitline: Could not open file history: {0}", msg));
       }
     },
@@ -69,7 +70,7 @@ export function activate(context: vscode.ExtensionContext): GitlineExports {
       await runSyncWithProgress(root, op);
       await revealCommitPanelAndReload();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorMessage(e);
       void vscode.window.showErrorMessage(vscode.l10n.t("Gitline: {0}", msg));
     }
   };

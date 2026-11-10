@@ -17,20 +17,58 @@
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
   }
 
-  function formatTime(sec) {
+  /** [unit, seconds per unit] from largest to smallest, as the relative time is rounded down. */
+  var REL_UNITS = [["year", 86400 * 365], ["month", 86400 * 30], ["day", 86400], ["hour", 3600], ["minute", 60]];
+  var relFormatters = {};
+
+  /** The webview's UI language (the shell sets <html lang> from VS Code's display language). */
+  function uiLang() {
+    var l = typeof document !== "undefined" && document.documentElement ? document.documentElement.lang : "";
+    return l || "en";
+  }
+
+  /**
+   * "6m ago" / "6분 전" / "6分前": relative time in the UI language. The narrow style keeps English
+   * exactly as before; without Intl.RelativeTimeFormat it falls back to that English.
+   */
+  function formatTime(sec, lang, nowSec) {
     if (!sec) return "";
-    var diff = Math.floor(Date.now() / 1000 - sec);
-    if (diff < 60) return "just now";
-    if (diff < 3600) return Math.floor(diff / 60) + "m ago";
-    if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
-    if (diff < 86400 * 30) return Math.floor(diff / 86400) + "d ago";
-    if (diff < 86400 * 365) return Math.floor(diff / (86400 * 30)) + "mo ago";
-    return Math.floor(diff / (86400 * 365)) + "y ago";
+    var now = typeof nowSec === "number" ? nowSec : Date.now() / 1000;
+    var diff = Math.max(0, Math.floor(now - sec));
+    var unit = null, value = 0;
+    for (var i = 0; i < REL_UNITS.length; i++) {
+      if (diff >= REL_UNITS[i][1]) {
+        unit = REL_UNITS[i][0];
+        value = Math.floor(diff / REL_UNITS[i][1]);
+        break;
+      }
+    }
+    var locale = lang || uiLang();
+    var Rtf = typeof Intl !== "undefined" ? Intl.RelativeTimeFormat : undefined;
+    if (Rtf) {
+      try {
+        // Words only where they read better: "now", "yesterday". Elsewhere numbers — "auto" would
+        // also give "last mo." / "last yr.", which is vaguer than "1mo ago".
+        var numeric = !unit || unit === "day" ? "auto" : "always";
+        var key = locale + "|" + numeric;
+        var f = relFormatters[key] || (relFormatters[key] = new Rtf(locale, { numeric: numeric, style: "narrow" }));
+        return unit ? f.format(-value, unit) : f.format(0, "second");
+      } catch (e) {
+        // unknown locale tag: fall through to English
+      }
+    }
+    if (!unit) return "just now";
+    var short = { year: "y", month: "mo", day: "d", hour: "h", minute: "m" }[unit];
+    return value + short + " ago";
   }
 
   function formatTimeFull(sec) {
     if (!sec) return "";
-    return new Date(sec * 1000).toLocaleString();
+    try {
+      return new Date(sec * 1000).toLocaleString(uiLang());
+    } catch (e) {
+      return new Date(sec * 1000).toLocaleString();
+    }
   }
 
   function baseName(p) {
@@ -61,7 +99,6 @@
   }
 
   GV.util = {
-    LANE_PALETTE: LANE_PALETTE,
     laneColor: laneColor,
     esc: esc,
     formatTime: formatTime,
@@ -71,4 +108,5 @@
     el: el,
     showListMessage: showListMessage,
   };
-})(window.GV = window.GV || {});
+  if (typeof module !== "undefined" && module.exports) module.exports = GV.util; // unit tests
+})(typeof window !== "undefined" ? (window.GV = window.GV || {}) : {});

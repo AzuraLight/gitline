@@ -142,8 +142,11 @@
   opacity: 0.9;
 }
 
-.gv-shell .gv-search__clear {
-  flex-shrink: 0;
+/* Small round ✕ buttons: search clear, notice close, compare exit, path-filter clear. */
+.gv-shell .gv-search__clear,
+.gv-shell .gv-rev-notice__close,
+.gv-shell .gv-compare-chip__exit,
+.gv-shell .gv-path-filter__clear {
   width: 18px;
   height: 18px;
   display: inline-flex;
@@ -155,8 +158,18 @@
   background: transparent;
   color: var(--gv-muted);
   cursor: pointer;
-  font-size: 0.85em;
+  font-size: 0.9em;
   line-height: 1;
+}
+
+.gv-shell .gv-search__clear,
+.gv-shell .gv-rev-notice__close,
+.gv-shell .gv-path-filter__clear {
+  flex-shrink: 0;
+}
+
+.gv-shell .gv-search__clear {
+  font-size: 0.85em;
 }
 
 .gv-shell .gv-search__clear:hover {
@@ -168,7 +181,9 @@
   display: none !important;
 }
 
-.gv-shell .gv-path-filter {
+/* Pills in the toolbar: the path filter and the compare chip. */
+.gv-shell .gv-path-filter,
+.gv-shell .gv-compare-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -176,6 +191,9 @@
   border-radius: 999px;
   font-size: 0.8em;
   font-weight: 500;
+}
+
+.gv-shell .gv-path-filter {
   background: color-mix(in srgb, var(--gv-accent) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--gv-accent) 40%, transparent);
   color: var(--vscode-foreground);
@@ -193,9 +211,10 @@
   margin-left: 6px;
 }
 
-.gv-shell .gv-merge-toggle__btn {
+/* Outlined round toolbar buttons: merge filters and pull / push / fetch. */
+.gv-shell .gv-merge-toggle__btn,
+.gv-shell .gv-sync__btn {
   font-family: var(--gv-font-mono);
-  font-size: 0.78em;
   font-weight: 600;
   padding: 3px 8px;
   border-radius: 999px;
@@ -204,6 +223,10 @@
   color: var(--gv-muted);
   cursor: pointer;
   line-height: 1;
+}
+
+.gv-shell .gv-merge-toggle__btn {
+  font-size: 0.78em;
 }
 
 .gv-shell .gv-merge-toggle__btn:hover {
@@ -288,16 +311,7 @@
 }
 
 .gv-shell .gv-sync__btn {
-  font-family: var(--gv-font-mono);
   font-size: 0.82em;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: transparent;
-  border: 1px solid var(--gv-line);
-  color: var(--gv-muted);
-  cursor: pointer;
-  line-height: 1;
 }
 
 .gv-shell .gv-sync__btn:hover:not(:disabled) {
@@ -320,7 +334,9 @@
   display: none;
 }
 
-.gv-shell .gv-rev-notice {
+/* Notice bars under the toolbar: the missing-branch notice and the rebase banner. */
+.gv-shell .gv-rev-notice,
+.gv-shell .gv-rebase-banner {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -328,6 +344,9 @@
   padding: 6px 8px 6px 10px;
   border-radius: 6px;
   font-size: 0.82em;
+}
+
+.gv-shell .gv-rev-notice {
   background: color-mix(in srgb, var(--vscode-editorWarning-foreground, #f0883e) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--vscode-editorWarning-foreground, #f0883e) 45%, transparent);
   color: var(--vscode-foreground);
@@ -347,35 +366,11 @@
   min-width: 0;
 }
 
-.gv-shell .gv-rev-notice__close {
-  flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--gv-muted);
-  cursor: pointer;
-  font-size: 0.9em;
-  line-height: 1;
-}
-
 .gv-shell .gv-rev-notice__close:hover {
   background: color-mix(in srgb, var(--vscode-foreground) 18%, transparent);
 }
 
 .gv-shell .gv-rebase-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 6px 0 0;
-  padding: 6px 8px 6px 10px;
-  border-radius: 6px;
-  font-size: 0.82em;
   background: color-mix(in srgb, var(--vscode-editorInfo-foreground, #6cb6ff) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--vscode-editorInfo-foreground, #6cb6ff) 45%, transparent);
   color: var(--vscode-foreground);
@@ -430,13 +425,6 @@
 }
 
 .gv-shell .gv-compare-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 4px 3px 10px;
-  border-radius: 999px;
-  font-size: 0.8em;
-  font-weight: 500;
   background: color-mix(in srgb, #f0883e 18%, transparent);
   border: 1px solid color-mix(in srgb, #f0883e 50%, transparent);
   color: var(--vscode-foreground);
@@ -449,22 +437,6 @@
 .gv-shell .gv-compare-chip__label {
   font-family: var(--gv-font-mono);
   font-size: 0.95em;
-}
-
-.gv-shell .gv-compare-chip__exit {
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--gv-muted);
-  cursor: pointer;
-  font-size: 0.9em;
-  line-height: 1;
 }
 
 .gv-shell .gv-compare-chip__exit:hover {
@@ -608,23 +580,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-}
-
-.gv-shell .gv-path-filter__clear {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--gv-muted);
-  cursor: pointer;
-  font-size: 0.9em;
-  line-height: 1;
 }
 
 .gv-shell .gv-path-filter__clear:hover {

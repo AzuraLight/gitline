@@ -9,6 +9,22 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 }
 
+/**
+ * Toolbar and pane icons: inline SVG drawn with currentColor, so they follow the theme without an
+ * icon font. 16×16 viewBox, stroke-based, in the spirit of VS Code's codicons.
+ */
+const svg = (body: string): string =>
+  `<svg class="gv-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+const ICONS = {
+  // A merge node (two parents joining) — struck through / highlighted.
+  hideMerges: svg('<circle cx="5" cy="4" r="1.6"/><circle cx="11" cy="4" r="1.6"/><circle cx="8" cy="12" r="1.6"/><path d="M5 5.6v1.2c0 1.6 3 2 3 3.6M11 5.6v1.2c0 1.6-3 2-3 3.6"/><path d="M2.5 14 13.5 2"/>'),
+  onlyMerges: svg('<circle cx="5" cy="4" r="1.6"/><circle cx="11" cy="4" r="1.6"/><circle cx="8" cy="12" r="2.2" fill="currentColor"/><path d="M5 5.6v1.2c0 1.6 3 2 3 3.6M11 5.6v1.2c0 1.6-3 2-3 3.6"/>'),
+  pull: svg('<path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/>'),
+  push: svg('<path d="M8 13.5v-8M4.5 9 8 5.5 11.5 9M3 2.5h10"/>'),
+  fetch: svg('<path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"/>'),
+  chevron: svg('<path d="M6 4l4 4-4 4"/>'),
+};
+
 /** Stylesheets in cascade order — same order as the sections of the former single graph.css. */
 const STYLESHEETS = [
   "base.css",
@@ -20,6 +36,7 @@ const STYLESHEETS = [
   "context-menu.css",
   "detail.css",
   "rows.css",
+  "layout.css",
 ];
 
 /** Webview scripts in load order — each module reads only what earlier ones put on window.GV. */
@@ -33,7 +50,10 @@ const WEBVIEW_MODULES = [
   "rebaseEditor.js",
   "menus.js",
   "branchTree.js",
+  "refChips.js",
+  "commitNav.js",
   "commitList.js",
+  "layout.js",
   "main.js",
 ];
 
@@ -69,6 +89,11 @@ export function buildCommitGraphShellHtml(
     `script-src 'nonce-${nonce}'`,
   ].join("; ");
   const uiJson = safeJsonForScript(ui);
+  /** The collapse / expand button at the start of a pane head (layout.js wires it up). */
+  const paneToggle = (pane: string, label: string): string => {
+    const title = escapeHtml(ui.togglePaneTitle.replace("{0}", label));
+    return `<button type="button" class="gv-pane-toggle" data-pane-toggle="${pane}" aria-expanded="true" title="${title}" aria-label="${title}">${ICONS.chevron}</button>`;
+  };
   const scriptTags = WEBVIEW_MODULES.map((name) => {
     const src = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "media", "webview", name));
     return `<script nonce="${nonce}" src="${src}"></script>`;
@@ -89,7 +114,7 @@ export function buildCommitGraphShellHtml(
         <span class="gv-topbar__mark" aria-hidden="true"></span>
         <span class="gv-title">${escapeHtml(ui.heading)}</span>
       </div>
-      <div class="gv-repo-picker" id="repo-picker">
+      <div class="gv-repo-picker">
         <button type="button" class="gv-repo-badge" id="repo-path" aria-haspopup="true" aria-expanded="false" title="${escapeHtml(ui.repoPickerTitle)}"></button>
         <div class="gv-repo-menu" id="repo-menu" role="menu" hidden></div>
       </div>
@@ -101,14 +126,14 @@ export function buildCommitGraphShellHtml(
         <input id="search-input" type="text" class="gv-search__input" placeholder="${escapeHtml(ui.searchPlaceholder)}" autocomplete="off" spellcheck="false" />
         <button type="button" id="btn-clear-search" class="gv-search__clear" hidden title="${escapeHtml(ui.searchClearTitle)}" aria-label="${escapeHtml(ui.searchClearTitle)}">✕</button>
       </div>
-      <div class="gv-merge-toggle" role="group" aria-label="merges">
-        <button type="button" id="btn-hide-merges" class="gv-merge-toggle__btn" title="${escapeHtml(ui.hideMergesTitle)}" aria-pressed="false">⊘M</button>
-        <button type="button" id="btn-only-merges" class="gv-merge-toggle__btn" title="${escapeHtml(ui.onlyMergesTitle)}" aria-pressed="false">⊕M</button>
+      <div class="gv-merge-toggle" role="group" aria-label="${escapeHtml(ui.mergesGroupAria)}">
+        <button type="button" id="btn-hide-merges" class="gv-merge-toggle__btn" title="${escapeHtml(ui.hideMergesTitle)}" aria-label="${escapeHtml(ui.hideMergesTitle)}" aria-pressed="false">${ICONS.hideMerges}</button>
+        <button type="button" id="btn-only-merges" class="gv-merge-toggle__btn" title="${escapeHtml(ui.onlyMergesTitle)}" aria-label="${escapeHtml(ui.onlyMergesTitle)}" aria-pressed="false">${ICONS.onlyMerges}</button>
       </div>
-      <div class="gv-sync" role="group" aria-label="sync">
-        <button type="button" id="btn-pull" class="gv-sync__btn" title="${escapeHtml(ui.pullTitle)}">↓</button>
-        <button type="button" id="btn-push" class="gv-sync__btn" title="${escapeHtml(ui.pushTitle)}">↑<span id="sync-counts" class="gv-sync__counts" hidden></span></button>
-        <button type="button" id="btn-fetch" class="gv-sync__btn" title="${escapeHtml(ui.fetchTitle)}">⟳</button>
+      <div class="gv-sync" role="group" aria-label="${escapeHtml(ui.syncGroupAria)}">
+        <button type="button" id="btn-pull" class="gv-sync__btn" title="${escapeHtml(ui.pullTitle)}" aria-label="${escapeHtml(ui.pullTitle)}">${ICONS.pull}</button>
+        <button type="button" id="btn-push" class="gv-sync__btn" title="${escapeHtml(ui.pushTitle)}" aria-label="${escapeHtml(ui.pushTitle)}">${ICONS.push}<span id="sync-counts" class="gv-sync__counts" hidden></span></button>
+        <button type="button" id="btn-fetch" class="gv-sync__btn" title="${escapeHtml(ui.fetchTitle)}" aria-label="${escapeHtml(ui.fetchTitle)}">${ICONS.fetch}</button>
       </div>
       <div id="compare-chip" class="gv-compare-chip" hidden>
         <span class="gv-compare-chip__label" id="compare-chip-label"></span>
@@ -136,12 +161,17 @@ export function buildCommitGraphShellHtml(
     </div>
   </header>
   <main class="gv-panel-main gv-workspace-root">
-    <aside id="branch-bar" class="gv-ref-sidebar" hidden aria-label="${escapeHtml(ui.branchBarAria)}">
-      <div class="gv-ref-sidebar__head">
-        <span class="gv-ref-sidebar__title">${escapeHtml(ui.branchBarTitle)}</span>
+    <aside id="branch-bar" class="gv-ref-sidebar gv-collapsible" data-pane="sidebar" hidden aria-label="${escapeHtml(ui.branchBarAria)}">
+      <div class="gv-ref-sidebar__head gv-collapsible__head">
+        ${paneToggle("sidebar", ui.branchBarTitle)}
+        <span class="gv-ref-sidebar__title gv-collapsible__title">${escapeHtml(ui.branchBarTitle)}</span>
       </div>
-      <div id="branch-tree-root" class="gv-ref-tree-scroll" role="tree"></div>
+      <div class="gv-ref-filter gv-collapsible__body">
+        <input id="branch-filter" type="search" class="gv-ref-filter__input" placeholder="${escapeHtml(ui.branchFilterPlaceholder)}" aria-label="${escapeHtml(ui.branchFilterPlaceholder)}" autocomplete="off" spellcheck="false" />
+      </div>
+      <div id="branch-tree-root" class="gv-ref-tree-scroll gv-collapsible__body" role="tree"></div>
     </aside>
+    <div id="split-sidebar" class="gv-splitter" role="separator" aria-orientation="vertical" tabindex="0" aria-label="${escapeHtml(ui.resizeSidebarAria)}" title="${escapeHtml(ui.resizeHint)}"></div>
     <div class="gv-panel-center">
       <div id="empty-state" class="gv-empty-state" hidden>
         <div class="gv-empty-card">
@@ -151,11 +181,12 @@ export function buildCommitGraphShellHtml(
         </div>
       </div>
       <div id="graph-workspace" class="gv-graph-workspace gv-workspace-three">
-        <div class="gv-pane gv-pane-log" role="region" aria-label="${escapeHtml(ui.paneLogAria)}">
-          <div class="gv-pane-head gv-pane-head--log">
-            <span class="gv-pane-head__label">${escapeHtml(ui.paneLogAria)}</span>
+        <div class="gv-pane gv-pane-log gv-collapsible" data-pane="log" role="region" aria-label="${escapeHtml(ui.paneLogAria)}">
+          <div class="gv-pane-head gv-pane-head--log gv-collapsible__head">
+            ${paneToggle("log", ui.paneLogAria)}
+            <span class="gv-pane-head__label gv-collapsible__title">${escapeHtml(ui.paneLogAria)}</span>
           </div>
-          <div class="gv-unified-wrap">
+          <div class="gv-unified-wrap gv-collapsible__body">
             <div class="gv-unified-head" aria-hidden="true">
               <span class="gv-unified-head-graph">${escapeHtml(ui.columnGraph)}</span>
               <span class="gv-unified-head-commit">${escapeHtml(ui.columnCommit)}</span>
@@ -166,11 +197,13 @@ export function buildCommitGraphShellHtml(
             </div>
           </div>
         </div>
-        <div class="gv-pane gv-pane-preview">
-          <div class="gv-pane-head gv-pane-head--preview">
-            <span class="gv-pane-head__label">${escapeHtml(ui.panePreviewTitle)}</span>
+        <div id="split-preview" class="gv-splitter" role="separator" aria-orientation="vertical" tabindex="0" aria-label="${escapeHtml(ui.resizePreviewAria)}" title="${escapeHtml(ui.resizeHint)}"></div>
+        <div class="gv-pane gv-pane-preview gv-collapsible" data-pane="preview" role="region" aria-label="${escapeHtml(ui.panePreviewTitle)}">
+          <div class="gv-pane-head gv-pane-head--preview gv-collapsible__head">
+            ${paneToggle("preview", ui.panePreviewTitle)}
+            <span class="gv-pane-head__label gv-collapsible__title">${escapeHtml(ui.panePreviewTitle)}</span>
           </div>
-          <section id="commit-detail" class="gv-detail gv-detail--empty" aria-live="polite">
+          <section id="commit-detail" class="gv-detail gv-detail--empty gv-collapsible__body" aria-live="polite">
             <p class="gv-detail-hint">${escapeHtml(ui.detailHint)}</p>
           </section>
         </div>

@@ -1,6 +1,6 @@
 import { runGitCommand, runGitNetworkCommand } from "./gitExec";
 
-export const COMMIT_ACTION_IDS = [
+const COMMIT_ACTION_IDS = [
   "checkout-detached",
   "merge-commit",
   "rebase-onto",
@@ -15,7 +15,7 @@ export function isCommitActionId(v: string): v is CommitActionId {
   return (COMMIT_ACTION_IDS as readonly string[]).includes(v);
 }
 
-export const BRANCH_ACTION_IDS = [
+const BRANCH_ACTION_IDS = [
   "branch-checkout",
   "branch-delete",
   "branch-delete-force",
@@ -32,7 +32,7 @@ export function isBranchActionId(v: string): v is BranchActionId {
   return (BRANCH_ACTION_IDS as readonly string[]).includes(v);
 }
 
-export const STASH_ACTION_IDS = ["stash-apply", "stash-pop", "stash-drop"] as const;
+const STASH_ACTION_IDS = ["stash-apply", "stash-pop", "stash-drop"] as const;
 export type StashActionId = (typeof STASH_ACTION_IDS)[number];
 export function isStashActionId(v: string): v is StashActionId {
   return (STASH_ACTION_IDS as readonly string[]).includes(v);

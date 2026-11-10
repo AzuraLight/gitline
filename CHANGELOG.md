@@ -1,5 +1,54 @@
 # Changelog
 
+## 1.5.1
+
+### Changed
+
+- **Resizable, collapsible panes.** The branch list, the graph and the preview each
+  collapse to a narrow strip from the chevron in their header (or a click on the strip),
+  and the two dividers between them drag to resize — or focus one and use ←/→
+  (Shift for bigger steps), Enter to collapse, double-click to reset. Dragging far past
+  the minimum snaps a pane shut. Sizes and collapsed panes are remembered. The graph and
+  the preview never collapse together.
+- **Commit messages stay readable next to branch labels.** A local branch and its remote at
+  the same commit share one label (`main ⇄`), `origin/HEAD` is no longer shown, and at most
+  two labels sit inline — the rest collapse into `+N` with the full list in its tooltip.
+  Labels go HEAD, tags, local, remote, so a release tag is not the one hidden.
+- **Narrow graph pane:** author, then time, then hash drop out before the message is cut.
+- **Branch filter** at the top of the branch list: type to narrow (`origin/` for one remote,
+  `chore` for a prefix); Esc clears, ↓ jumps to the first match.
+- **Keyboard in the commit list:** ↑/↓, Page Up/Down, Home/End move and open commits;
+  Ctrl/Cmd+↓ / ↑ follow the first parent / the child on the same branch; Shift+F10 opens
+  the commit menu; Ctrl/Cmd+F jumps to the commit search. The list is a proper listbox
+  for screen readers.
+- **Toolbar icons** for the merge filters and pull / push / fetch instead of text glyphs,
+  each with an accessible name.
+- **Relative times follow the display language** ("6분 전", "6分前"). English now reads
+  "now" and "yesterday" instead of "just now" and "1d ago"; everything else is unchanged
+  ("6m ago", "1mo ago").
+- Decorations that are not branches or tags — `stash`, `grafted`, `replace/…` — get the
+  neutral "other" label style and sort last, instead of looking like local branches.
+
+### Fixed
+
+- **Local branches with a `/` in the name were coloured as remote branches**
+  (`chore/code-cleanup`, `fix/…`). Labels are now classified from full ref names.
+- A branch with a comma in its name (`a,b`) showed as two labels.
+- **Rebase Continue / Skip that stopped on the next conflict showed git's raw error.**
+  git exits with an error there, but the rebase is simply paused again; Gitline now judges by
+  the rebase state and shows "Still paused — resolve them in the SCM view, then continue
+  again" with git's detail underneath, for Skip as well as Continue.
+
+### Internal
+
+- Dead code removed (an unused message handler, a stale translation, unused exports);
+  the rebase continue / skip handlers and error-message formatting share one helper each;
+  duplicated toolbar styles are merged and commit-row styles moved out of the
+  context-menu stylesheet — the rendered styles are unchanged.
+- New pure modules with unit tests: ref labels, keyboard movement, pane layout.
+- Integration tests also run on the oldest VS Code that `engines.vscode` allows (1.85), locally
+  with `npm run test:integration:minimum` and in CI on Linux.
+
 ## 1.5.0
 
 ### Added
