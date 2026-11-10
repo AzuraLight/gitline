@@ -10,7 +10,8 @@ const repo = (root: string, rel: string) => {
   fs.mkdirSync(path.join(root, rel, ".git"), { recursive: true });
   return path.join(root, rel);
 };
-const rel = (root: string, list: string[]) => list.map((p) => path.relative(root, p) || ".");
+// Relative paths with "/" on every OS, so expectations read the same on Windows.
+const rel = (root: string, list: string[]) => list.map((p) => (path.relative(root, p) || ".").split(path.sep).join("/"));
 const isWin = process.platform === "win32";
 
 describe("repository scan — edge cases", () => {
@@ -265,9 +266,14 @@ describe("picker labels — edge cases", () => {
     assert.ok(l.detail.startsWith("w" + path.sep + "d0"));
   });
 
-  it("case differences in the workspace folder are not treated as containing (documents behaviour)", () => {
+  it("case differences in the workspace folder follow the platform's path rules", () => {
     const l = repoLabel(path.resolve("/Work/Proj/repo"), [path.resolve("/work/proj")]);
-    // On a case-insensitive disk this is the same folder, but the label falls back to the parent path.
-    assert.strictEqual(l.detail, path.resolve("/Work/Proj"));
+    if (process.platform === "win32") {
+      // Windows paths are case-insensitive (path.win32.relative ignores case): it is inside.
+      assert.strictEqual(l.detail, "proj");
+    } else {
+      // POSIX path rules are case-sensitive: the label falls back to the parent path.
+      assert.strictEqual(l.detail, path.resolve("/Work/Proj"));
+    }
   });
 });

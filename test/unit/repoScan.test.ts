@@ -22,7 +22,8 @@ function tree(spec: Record<string, "repo" | "worktree" | "dir">): string {
   return root;
 }
 
-const rel = (root: string, list: string[]) => list.map((p) => path.relative(root, p) || ".");
+// Relative paths with "/" on every OS, so expectations read the same on Windows.
+const rel = (root: string, list: string[]) => list.map((p) => (path.relative(root, p) || ".").split(path.sep).join("/"));
 
 describe("repository scan", () => {
   let root: string;
