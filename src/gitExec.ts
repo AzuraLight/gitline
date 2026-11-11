@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { execFile, spawn } from "child_process";
@@ -125,6 +126,25 @@ export async function runGitNetworkCommand(cwd: string, args: string[]): Promise
   return execGit(cwd, args, { timeoutMs: NETWORK_TIMEOUT_MS });
 }
 
+/**
+ * Exit status of a git probe whose answer is its exit code (`merge-base --is-ancestor`: 0 yes,
+ * 1 no, anything else = could not tell). -1 when git did not run or timed out.
+ */
+async function gitExitCode(cwd: string, args: string[], timeoutMs: number): Promise<number> {
+  try {
+    await execFileAsync("git", args, { cwd, timeout: timeoutMs, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
+    return 0;
+  } catch (e: unknown) {
+    const code = (e as { code?: unknown }).code;
+    return typeof code === "number" ? code : -1;
+  }
+}
+
+/** True in a shallow clone: ancestry past its boundary is unknown, so "not on HEAD" can be wrong. */
+async function isShallow(cwd: string): Promise<boolean> {
+  return (await tryGit(cwd, ["rev-parse", "--is-shallow-repository"]))?.trim() === "true";
+}
+
 /** Runs `git` and resolves to null instead of throwing — for probes where failure is an answer. */
 async function tryGit(cwd: string, args: string[], input?: string): Promise<string | null> {
   try {
@@ -178,7 +198,11 @@ export async function resolveRepoRootForFile(fileFsPath: string): Promise<string
 
 /** Current branch (or empty if detached / error). */
 export async function readCurrentBranchName(cwd: string): Promise<string> {
-  return (await tryGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() ?? "";
+  const name = (await tryGit(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim();
+  if (name) return name;
+  // A branch with no commits yet (new repository, `checkout --orphan`): HEAD names it, but
+  // rev-parse cannot resolve it. symbolic-ref reads the name without needing a commit.
+  return (await tryGit(cwd, ["symbolic-ref", "--short", "-q", "HEAD"]))?.trim() ?? "";
 }
 
 /**
@@ -228,7 +252,10 @@ export async function readBranchTreePayload(cwd: string): Promise<GitBranchTreeP
   const remotes = [...remoteMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([remote, set]) => ({ remote, branches: [...set].sort() }));
-  return { current, locals, remotes };
+  // The sidebar starts a Ctrl/Cmd+click selection from `current`: only a branch that exists can be
+  // part of it. A branch with no commits yet is named in the header (payload.branch), not here.
+  const sidebarCurrent = current === "HEAD" || locals.includes(current) ? current : "";
+  return { current: sidebarCurrent, locals, remotes };
 }
 
 const COMMIT_RECORD_SEP = "\x1f";
@@ -384,7 +411,74 @@ export async function resolveRefSelection(cwd: string, wanted: string[]): Promis
  * Hashes reachable from `rev` but not from HEAD, at most `cap` of them. Undefined for HEAD's own
  * log (nothing to dim) or when it cannot be computed (unborn HEAD) — callers then dim nothing.
  */
-export async function readOffHeadHashes(cwd: string, rev: ViewRev | undefined, cap: number): Promise<Set<string> | undefined> {
+/**
+ * The last few off-HEAD answers. The rev-list walks up to `cap` commits and runs on every refresh
+ * and page; it only changes when HEAD or a ref tip moves, so the key holds HEAD and every tip.
+ */
+const offHeadCache = new Map<string, ReadonlySet<string> | undefined>();
+const OFF_HEAD_CACHE_SIZE = 6;
+
+/**
+ * Per repository: what checking the cache key cost against what computing the answer cost, last
+ * time both were measured. With tens of thousands of refs, listing them can cost more than the
+ * capped rev-list it is meant to save — then the cache is skipped, so no repository is slower than
+ * without it. Measured again every RECHECK_EVERY calls, as a repository's refs come and go.
+ */
+type OffHeadCost = { keyMs: number; computeMs: number; skip: boolean; calls: number };
+const offHeadCost = new Map<string, OffHeadCost>();
+const RECHECK_EVERY = 50;
+
+/** Times one phase of the cost check ("key" or "compute"); tests replace `ms` to pick the costs. */
+export const offHeadClock = {
+  ms: (_phase: "key" | "compute", started: number): number => performance.now() - started,
+};
+
+/** Test hook: forget cached answers and measured costs. */
+export function resetOffHeadCache(): void {
+  offHeadCache.clear();
+  offHeadCost.clear();
+}
+
+export async function readOffHeadHashes(cwd: string, rev: ViewRev | undefined, cap: number): Promise<ReadonlySet<string> | undefined> {
+  if (Array.isArray(rev) ? rev.length === 0 : !rev?.trim()) return undefined;
+  const cost = offHeadCost.get(cwd) ?? { keyMs: 0, computeMs: 0, skip: false, calls: 0 };
+  offHeadCost.set(cwd, cost);
+  cost.calls++;
+  if (cost.skip && cost.calls % RECHECK_EVERY !== 0) return computeOffHeadHashes(cwd, rev, cap);
+  // Not cached in a shallow clone: deepening it (fetch --unshallow / --deepen) changes the answer
+  // without moving any ref. Nor with grafts, which do the same from a file.
+  if ((await isShallow(cwd)) || (await tryGit(cwd, ["rev-parse", "--git-path", "info/grafts"]).then((p) =>
+    p !== null && fs.existsSync(path.resolve(cwd, p.trim()))))) {
+    return computeOffHeadHashes(cwd, rev, cap);
+  }
+  const t0 = performance.now();
+  const tips = await tryGit(cwd, ["for-each-ref", "--format=%(objectname) %(refname)"]);
+  const head = await tryGit(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+  // The order of a picked list does not change the answer.
+  const revKey = Array.isArray(rev) ? [...new Set(rev)].sort() : rev;
+  const key = tips === null || head === null
+    ? null
+    : createHash("sha1").update(JSON.stringify([cwd, revKey, cap, head.trim(), tips])).digest("hex");
+  cost.keyMs = offHeadClock.ms("key", t0);
+  if (key !== null && offHeadCache.has(key)) {
+    const hit = offHeadCache.get(key);
+    offHeadCache.delete(key); // most recently used goes last
+    offHeadCache.set(key, hit);
+    return hit;
+  }
+  const t1 = performance.now();
+  const result = await computeOffHeadHashes(cwd, rev, cap);
+  cost.computeMs = offHeadClock.ms("compute", t1);
+  // The key cost more than the answer: stop paying for it in this repository (until the recheck).
+  cost.skip = key === null || cost.keyMs > cost.computeMs;
+  if (key !== null && !cost.skip) {
+    offHeadCache.set(key, result);
+    while (offHeadCache.size > OFF_HEAD_CACHE_SIZE) offHeadCache.delete(offHeadCache.keys().next().value as string);
+  }
+  return result;
+}
+
+async function computeOffHeadHashes(cwd: string, rev: ViewRev | undefined, cap: number): Promise<Set<string> | undefined> {
   // --topo-order matches the graph's order, so at the cap it is the oldest rows that go undimmed.
   // The trailing "--" keeps a file named HEAD (or like a branch) from being read as a path.
   const base = ["rev-list", "--topo-order", `--max-count=${cap}`];
@@ -459,6 +553,13 @@ export async function readRecentCommits(
       const hit = parseCommitRows(
         await execGit(cwd, ["log", "--max-count=1", "--decorate=full", `--pretty=format:${COMMIT_FORMAT}`, hash]),
       );
+      // Found by hash, not by the view's revisions: dim it when HEAD cannot reach it, like the
+      // view dims everything else not on the current branch (in HEAD's own view too).
+      // Only a clear "no" (exit 1) dims; an error, a timeout or a shallow clone (where git cannot
+      // see the whole ancestry) leaves it as it was before 1.8.1.
+      if (hit.length && !(await isShallow(cwd))) {
+        if ((await gitExitCode(cwd, ["merge-base", "--is-ancestor", hash, "HEAD"], 10_000)) === 1) hit[0].offHead = true;
+      }
       rows.unshift(...hit);
     }
   }

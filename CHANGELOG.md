@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.8.1
+
+### Fixed
+
+- On a branch with no commits yet — a new repository, or after `git checkout --orphan` — the
+  header now shows the branch name.
+- Searching by hash in the current branch's view lists a commit from another branch first, as
+  before, and now dims it like every other commit that is not on the current branch — only when
+  Git can tell for sure (never in a shallow clone).
+
+### Changed
+
+- Faster refreshes in big repositories: which commits are off the current branch is worked out
+  once and reused until `HEAD` or a branch, tag or remote branch moves, instead of on every
+  refresh and every page of history. Shallow clones (and repositories with grafts) are still
+  worked out every time, since deepening them changes the answer without moving a ref. In a
+  repository with so many refs that checking them costs more than the work it saves (tens of
+  thousands of tags, say), Gitline notices and skips the reuse, so no repository gets slower.
+
 ## 1.8.0
 
 ### Added
