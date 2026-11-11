@@ -146,8 +146,9 @@ describe("paused edge: detection", function () {
   });
 
   it("file names with spaces, quotes, a newline and non-ASCII", async () => {
-    const names = ["with space.txt", "quote\"d'.txt", "한글 파일.txt", "café.txt"];
-    if (process.platform !== "win32") names.push("new\nline.txt");
+    const names = ["with space.txt", "single'quote.txt", "한글 파일.txt", "café.txt"];
+    // Windows file names cannot hold a double quote or a newline.
+    if (process.platform !== "win32") names.push("double\"quote.txt", "new\nline.txt");
     const repo = diverged(names);
     try {
       tryGit(repo, "merge", "other");
