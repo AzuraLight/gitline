@@ -1,5 +1,6 @@
 import * as assert from "assert";
-import { continueRebase, isRebaseInProgress, runRebaseStep, skipRebase, type RebaseStepMessage } from "../../src/rebaseRun";
+import { isRebaseInProgress } from "../../src/rebaseRun";
+import { runPausedGitStep, runPausedStep, type PausedStepMessage, type PausedStepTexts } from "../../src/pausedOp";
 import { TempRepo } from "../helpers/tempRepo";
 
 /**
@@ -34,13 +35,23 @@ function resolve(repo: TempRepo, content: string): void {
 }
 
 function recorder() {
-  const sent: RebaseStepMessage[] = [];
-  return { sent, post: (m: RebaseStepMessage) => void sent.push(m), types: () => sent.map((m) => m.type) };
+  const sent: PausedStepMessage[] = [];
+  return { sent, post: (m: PausedStepMessage) => void sent.push(m), types: () => sent.map((m) => m.type) };
 }
+
+const STILL = "still paused";
+const TEXTS: PausedStepTexts = { unresolved: (n) => `unresolved ${n}`, stillPaused: STILL };
+type StepFn = (root: string) => Promise<unknown>;
+/** The banner's rebase step; `run` replaces the git call (to simulate failures). */
+const step = (root: string, which: "continue" | "skip", post: (m: PausedStepMessage) => void,
+  opts: { confirm?: () => Promise<boolean>; run?: StepFn } = {}) =>
+  runPausedStep(root, "rebase", which, post, TEXTS, {
+    confirm: opts.confirm,
+    run: opts.run ? (r) => opts.run!(r).then(() => undefined) : runPausedGitStep,
+  });
 
 describe("rebase continue / skip step", function () {
   this.timeout(30_000);
-  const STILL = "still paused";
 
   it("with no rebase running: reports done and reloads, without running the step", async () => {
     const repo = new TempRepo();
@@ -48,24 +59,23 @@ describe("rebase continue / skip step", function () {
       repo.commitEmpty("only");
       const r = recorder();
       let ran = false;
-      await runRebaseStep(repo.root, async () => { ran = true; }, r.post, { stillPausedMessage: STILL });
-      assert.deepStrictEqual(r.types(), ["rebaseDone", "reloadNow"]);
+      await step(repo.root, "continue", r.post, { run: async () => { ran = true; } });
+      assert.deepStrictEqual(r.types(), ["opDone", "reloadNow"]);
       assert.strictEqual(ran, false);
     } finally {
       repo.dispose();
     }
   });
 
-  it("continue with the conflict unresolved: says it is still paused (with git's detail) and reloads", async () => {
+  it("continue with the conflict unresolved: refused with the count, git is not run", async () => {
     const repo = conflictingRebase();
     try {
       assert.ok(await isRebaseInProgress(repo.root), "fixture is paused on a conflict");
       const r = recorder();
-      await runRebaseStep(repo.root, continueRebase, r.post, { stillPausedMessage: STILL });
-      // git exits non-zero, but the rebase is still paused: the friendly message, plus git's detail.
-      assert.deepStrictEqual(r.types(), ["rebaseError", "reloadNow"]);
-      const err = r.sent[0] as { message: string };
-      assert.ok(err.message.startsWith(STILL + "\n") && err.message.length > STILL.length + 1, err.message);
+      let ran = false;
+      await step(repo.root, "continue", r.post, { run: async () => { ran = true; } });
+      assert.deepStrictEqual(r.sent, [{ type: "opError", message: "unresolved 1" }]);
+      assert.strictEqual(ran, false);
       assert.ok(await isRebaseInProgress(repo.root));
     } finally {
       repo.dispose();
@@ -77,8 +87,8 @@ describe("rebase continue / skip step", function () {
     try {
       resolve(repo, "feature one (resolved)\n");
       const r = recorder();
-      await runRebaseStep(repo.root, continueRebase, r.post, { stillPausedMessage: STILL });
-      assert.deepStrictEqual(r.types(), ["rebaseError", "reloadNow"]);
+      await step(repo.root, "continue", r.post);
+      assert.deepStrictEqual(r.types(), ["opError", "reloadNow"]);
       const err = r.sent[0] as { message: string };
       assert.ok(err.message.startsWith(STILL), err.message);
       assert.ok(/a\.txt|CONFLICT|conflict/i.test(err.message), "git's detail names the conflict: " + err.message);
@@ -92,11 +102,11 @@ describe("rebase continue / skip step", function () {
     const repo = conflictingRebase();
     try {
       resolve(repo, "one\n");
-      await runRebaseStep(repo.root, continueRebase, () => undefined, { stillPausedMessage: STILL });
+      await step(repo.root, "continue", () => undefined);
       resolve(repo, "two\n");
       const r = recorder();
-      await runRebaseStep(repo.root, continueRebase, r.post, { stillPausedMessage: STILL });
-      assert.deepStrictEqual(r.types(), ["rebaseDone", "reloadNow"]);
+      await step(repo.root, "continue", r.post);
+      assert.deepStrictEqual(r.types(), ["opDone", "reloadNow"]);
       assert.ok(!(await isRebaseInProgress(repo.root)));
       assert.strictEqual(repo.git("log", "-1", "--format=%s").trim(), "feature 2");
     } finally {
@@ -110,7 +120,7 @@ describe("rebase continue / skip step", function () {
       const before = repo.git("status", "--porcelain");
       const r = recorder();
       let asked = 0;
-      await runRebaseStep(repo.root, skipRebase, r.post, { confirm: async () => { asked++; return false; } });
+      await step(repo.root, "skip", r.post, { confirm: async () => { asked++; return false; } });
       assert.strictEqual(asked, 1);
       assert.deepStrictEqual(r.sent, []);
       assert.ok(await isRebaseInProgress(repo.root));
@@ -123,29 +133,17 @@ describe("rebase continue / skip step", function () {
   it("skip confirmed twice: drops both feature commits and finishes", async () => {
     const repo = conflictingRebase();
     try {
-      const yes = { confirm: async () => true, stillPausedMessage: STILL };
+      const yes = { confirm: async () => true };
       const first = recorder();
-      await runRebaseStep(repo.root, skipRebase, first.post, yes);
+      await step(repo.root, "skip", first.post, yes);
       // Skipping onto the next conflicting commit: still paused, said once, then reload.
-      assert.deepStrictEqual(first.types(), ["rebaseError", "reloadNow"]);
+      assert.deepStrictEqual(first.types(), ["opError", "reloadNow"]);
       assert.ok((first.sent[0] as { message: string }).message.startsWith(STILL));
       assert.ok(await isRebaseInProgress(repo.root));
       const second = recorder();
-      await runRebaseStep(repo.root, skipRebase, second.post, yes);
-      assert.deepStrictEqual(second.types(), ["rebaseDone", "reloadNow"]);
+      await step(repo.root, "skip", second.post, yes);
+      assert.deepStrictEqual(second.types(), ["opDone", "reloadNow"]);
       assert.strictEqual(repo.git("log", "-1", "--format=%s").trim(), "main change");
-    } finally {
-      repo.dispose();
-    }
-  });
-
-  it("without a still-paused message, a failing step that leaves the rebase paused reports git's error", async () => {
-    const repo = conflictingRebase();
-    try {
-      const r = recorder();
-      await runRebaseStep(repo.root, continueRebase, r.post);
-      assert.deepStrictEqual(r.types(), ["rebaseError", "reloadNow"]);
-      assert.ok((r.sent[0] as { message: string }).message.length > 0);
     } finally {
       repo.dispose();
     }
@@ -155,13 +153,13 @@ describe("rebase continue / skip step", function () {
     const repo = conflictingRebase();
     try {
       const r = recorder();
-      await runRebaseStep(repo.root, async (root) => {
+      await step(repo.root, "skip", r.post, { run: async (root) => {
         repo.git("rebase", "--abort");
         throw new Error("aborted underneath " + root.length);
-      }, r.post, { stillPausedMessage: STILL });
-      assert.strictEqual(r.sent[0].type, "rebaseError");
+      } });
+      assert.strictEqual(r.sent[0].type, "opError");
       assert.ok((r.sent[0] as { message: string }).message.startsWith("aborted underneath"));
-      assert.deepStrictEqual(r.types(), ["rebaseError", "reloadNow"]);
+      assert.deepStrictEqual(r.types(), ["opError", "reloadNow"]);
     } finally {
       repo.dispose();
     }
@@ -171,8 +169,8 @@ describe("rebase continue / skip step", function () {
     const repo = conflictingRebase();
     try {
       const r = recorder();
-      await runRebaseStep(repo.root, async () => { throw "plain string failure"; }, r.post, { stillPausedMessage: STILL });
-      assert.deepStrictEqual(r.sent, [{ type: "rebaseError", message: STILL + "\nplain string failure" }, { type: "reloadNow" }]);
+      await step(repo.root, "skip", r.post, { run: async () => { throw "plain string failure"; } });
+      assert.deepStrictEqual(r.sent, [{ type: "opError", message: STILL + "\nplain string failure" }, { type: "reloadNow" }]);
     } finally {
       repo.dispose();
     }

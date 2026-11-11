@@ -42,15 +42,13 @@ import {
   type StashActionId,
 } from "./gitPanelActions";
 import { getCommitGraphWebviewUi, getWebviewHtmlLang } from "./nls";
+import { readConflictedFiles, readPausedKind, readPausedOp, runPausedStep, type PausedKind, type PausedStep } from "./pausedOp";
 import {
-  abortRebase,
-  continueRebase,
   isRebaseInProgress,
-  runRebaseStep,
   readRebaseCommits,
   resolveRebaseBase,
   runInteractiveRebase,
-  skipRebase,
+  REWORD_TOO_LONG,
   type RebaseAction,
   type RebaseTodoItem,
 } from "./rebaseRun";
@@ -83,7 +81,7 @@ let shownRoot: string | null = null;
 /** Webview messages that change a repository: they must run where the graph on screen points. */
 const WRITE_MESSAGES = new Set([
   "runSync", "commitAction", "branchAction", "stashAction", "createBranchAt", "createTagAt", "renameBranch",
-  "requestRebaseCommits", "applyRebase", "abortRebase", "continueRebase", "skipRebase",
+  "requestRebaseCommits", "applyRebase", "pausedStep",
 ]);
 
 /**
@@ -359,11 +357,24 @@ async function reportAndReload(
   webview: vscode.Webview,
   task: () => Promise<void>,
 ): Promise<void> {
+  const root = await getActiveRepoRoot();
+  const pausedBefore = root ? await readPausedKind(root).catch(() => null) : null;
   try {
     await task();
     webview.postMessage({ type: "reloadNow" });
   } catch (e: unknown) {
     const msg = errorMessage(e);
+    // A merge / cherry-pick / revert / rebase that this action left stopped on a conflict is not a
+    // failure to report raw: say what happened and where to go on; the reload brings up the banner.
+    // Anything that was already paused before keeps git's own error (e.g. a tag name taken).
+    const kind = root && !pausedBefore ? await readPausedKind(root).catch(() => null) : null;
+    if (kind) {
+      webview.postMessage({ type: "reloadNow" });
+      void vscode.window.showWarningMessage(
+        vscode.l10n.t("The {0} stopped on conflicts. Resolve them in Source Control, then use Continue in the Gitline banner — or Abort.", OP_NAMES[kind]()),
+      );
+      return;
+    }
     void vscode.window.showErrorMessage(vscode.l10n.t("Gitline: {0}", msg));
   }
 }
@@ -502,7 +513,13 @@ async function promptCreateTag(webview: vscode.Webview, refspec: string): Promis
     validateInput: (v) => (isValidRefName(v) ? undefined : vscode.l10n.t("Invalid tag name")),
   });
   if (!name) return;
-  await reportAndReload(webview, () => createTagAt(root, name, refspec));
+  // Escape cancels; an empty message makes a lightweight tag, as before 1.8.0.
+  const message = await vscode.window.showInputBox({
+    prompt: vscode.l10n.t("Tag message (leave empty for a lightweight tag)"),
+    placeHolder: vscode.l10n.t("e.g. Release 1.8.0"),
+  });
+  if (message === undefined) return;
+  await reportAndReload(webview, () => createTagAt(root, name, refspec, message));
 }
 
 async function promptRenameBranch(webview: vscode.Webview, branch: string): Promise<void> {
@@ -573,13 +590,13 @@ async function sendGraphPayload(
     const pf = typeof pathFilter === "string" && pathFilter.trim().length > 0 ? pathFilter.trim() : undefined;
     const q = typeof query === "string" && query.trim().length > 0 ? query.trim() : undefined;
     const branch = await readCurrentBranchName(root);
-    const [commits, offHead, branchTree, working, stashes, rebaseInProgress, sync, items] = await Promise.all([
+    const [commits, offHead, branchTree, working, stashes, paused, sync, items] = await Promise.all([
       readRecentCommits(root, capped, logRev, pf, q, mergesMode),
       readOffHeadHashes(root, logRev, OFF_HEAD_CAP),
       readBranchTreePayload(root),
       readWorkingState(root).catch(() => ({ staged: 0, modified: 0, untracked: 0, conflicted: 0 })),
       readStashes(root).catch(() => []),
-      isRebaseInProgress(root).catch(() => false),
+      readPausedOp(root).catch(() => null),
       readSyncState(root).catch(() => ({ upstream: null, ahead: 0, behind: 0 })),
       repoItems().catch((): RepoItem[] => [{ path: root, group: "workspace", ...repoLabel(root, []) }]),
     ]);
@@ -604,7 +621,8 @@ async function sendGraphPayload(
         revMissing: revMissing ?? "",
         dropSelection,
         revMissingIsList: revMissing !== undefined && sel.kind === "list",
-        rebaseInProgress,
+        // A merge / rebase / cherry-pick / revert stopped half-way: the banner and its buttons.
+        paused,
         // The view shows more than HEAD's history, so "on the current branch" means something.
         // At the cap the list is cut short, so older rows missing from it may not be on HEAD: no tint.
         onHeadKnown: offHead !== undefined && offHead.size < OFF_HEAD_CAP,
@@ -648,18 +666,27 @@ async function openStashFileDiff(ref: string, filePath: string, oldPath: string 
   });
 }
 
+function isPausedKind(s: unknown): s is PausedKind {
+  return s === "rebase" || s === "merge" || s === "cherry-pick" || s === "revert";
+}
+
+function isPausedStep(s: unknown): s is PausedStep {
+  return s === "continue" || s === "skip" || s === "abort";
+}
+
 function isRebaseAction(s: unknown): s is RebaseAction {
-  return s === "pick" || s === "drop" || s === "squash" || s === "fixup";
+  return s === "pick" || s === "reword" || s === "drop" || s === "squash" || s === "fixup";
 }
 
 async function sendRebaseCommits(webview: vscode.Webview, base: string): Promise<void> {
   const root = await getActiveRepoRoot();
   if (!root) return;
   try {
-    if (await isRebaseInProgress(root)) {
+    const busy = await readPausedKind(root);
+    if (busy) {
       webview.postMessage({
         type: "rebaseError",
-        message: vscode.l10n.t("A rebase is already in progress. Resolve or abort it first."),
+        message: vscode.l10n.t("A {0} is in progress. Finish or abort it first (banner above).", OP_NAMES[busy]()),
       });
       return;
     }
@@ -683,11 +710,16 @@ async function applyRebase(
     return;
   }
   const keptOrSquashed = items.filter((i) => i.action !== "drop");
-  if (keptOrSquashed.length === 0 || keptOrSquashed[0].action !== "pick") {
+  if (keptOrSquashed.length === 0 || (keptOrSquashed[0].action !== "pick" && keptOrSquashed[0].action !== "reword")) {
     webview.postMessage({
       type: "rebaseError",
-      message: vscode.l10n.t("First non-dropped commit must be a 'pick' (cannot squash/fixup onto nothing)."),
+      message: vscode.l10n.t("First non-dropped commit must be 'pick' or 'reword' (cannot squash/fixup onto nothing)."),
     });
+    return;
+  }
+  // git refuses an empty message half-way through; say so before anything is rewritten.
+  if (items.some((i) => i.action === "reword" && !(i.message ?? "").trim())) {
+    webview.postMessage({ type: "rebaseError", message: vscode.l10n.t("A reworded commit needs a message.") });
     return;
   }
   const yes = await confirm(
@@ -700,52 +732,74 @@ async function applyRebase(
     webview.postMessage({ type: "rebaseDone" });
     webview.postMessage({ type: "reloadNow" });
   } catch (e: unknown) {
-    const msg = errorMessage(e);
+    const msg = errorMessage(e) === REWORD_TOO_LONG
+      ? vscode.l10n.t("A reworded message is too long to apply. Shorten it, then try again.")
+      : errorMessage(e);
     if (await isRebaseInProgress(root)) {
       webview.postMessage({
         type: "rebaseError",
         message: vscode.l10n.t("Rebase paused (likely a conflict). Resolve in the SCM view, then continue or abort.\n{0}", msg),
       });
+      // The banner with the conflicted files comes with the reload.
+      webview.postMessage({ type: "reloadNow" });
     } else {
       webview.postMessage({ type: "rebaseError", message: msg });
     }
   }
 }
 
-async function continueRebaseAndReload(webview: vscode.Webview): Promise<void> {
-  const root = await getActiveRepoRoot();
-  if (!root) return;
-  await runRebaseStep(root, continueRebase, (m) => void webview.postMessage(m), {
-    stillPausedMessage: vscode.l10n.t("Still paused — there are unresolved conflicts. Resolve them in the SCM view, then continue again."),
-  });
-}
+const OP_NAMES: Record<PausedKind, () => string> = {
+  rebase: () => vscode.l10n.t("rebase"),
+  merge: () => vscode.l10n.t("merge"),
+  "cherry-pick": () => vscode.l10n.t("cherry-pick"),
+  revert: () => vscode.l10n.t("revert"),
+};
 
-async function skipRebaseAndReload(webview: vscode.Webview): Promise<void> {
-  const root = await getActiveRepoRoot();
-  if (!root) return;
-  await runRebaseStep(root, skipRebase, (m) => void webview.postMessage(m), {
-    confirm: () => confirm(vscode.l10n.t("Skip the current commit and continue the rebase?"), true),
-    // Skipping onto the next conflicting commit is the same situation as continuing into one.
-    stillPausedMessage: vscode.l10n.t("Still paused — there are unresolved conflicts. Resolve them in the SCM view, then continue again."),
-  });
-}
+/** A banner step is running: a second click must not start git again (it would hit index.lock). */
+let pausedStepRunning = false;
 
-async function abortRebaseAndReload(webview: vscode.Webview): Promise<void> {
-  const root = await getActiveRepoRoot();
-  if (!root) return;
-  if (!(await isRebaseInProgress(root))) {
-    webview.postMessage({ type: "rebaseDone" });
-    return;
-  }
-  const yes = await confirm(vscode.l10n.t("Abort the in-progress rebase?"), true);
-  if (!yes) return;
+/** Continue / Skip / Abort from the banner, on the operation the banner showed. */
+async function pausedStepAndReload(webview: vscode.Webview, kind: PausedKind, step: PausedStep): Promise<void> {
+  if (pausedStepRunning) return;
+  pausedStepRunning = true;
   try {
-    await abortRebase(root);
-    webview.postMessage({ type: "rebaseDone" });
-    webview.postMessage({ type: "reloadNow" });
+    await pausedStepOnce(webview, kind, step);
+  } finally {
+    pausedStepRunning = false;
+  }
+}
+
+async function pausedStepOnce(webview: vscode.Webview, kind: PausedKind, step: PausedStep): Promise<void> {
+  const root = await getActiveRepoRoot();
+  if (!root) return;
+  const op = OP_NAMES[kind]();
+  const confirmText =
+    step === "abort"
+      ? vscode.l10n.t("Abort the {0}? Your branch goes back to where it was before it started.", op)
+      : step === "skip"
+        ? vscode.l10n.t("Skip the current commit and continue the {0}?", op)
+        : undefined;
+  await runPausedStep(root, kind, step, (m) => void webview.postMessage(m), {
+    unresolved: (n) =>
+      vscode.l10n.t("{0} file(s) still have conflicts. Resolve them and stage them (+) in Source Control, then continue.", String(n)),
+    stillPaused: vscode.l10n.t("Still paused — there are unresolved conflicts. Resolve them in the SCM view, then continue again."),
+  }, { confirm: confirmText ? () => confirm(confirmText, step === "abort") : undefined });
+}
+
+/**
+ * A conflicted file from the banner: open it, where VS Code offers its conflict actions and merge
+ * editor. Resolved against the repository on screen, and only a path git lists as conflicted there:
+ * the path comes from the webview.
+ */
+async function openConflictFile(rel: string): Promise<void> {
+  const root = shownRoot;
+  if (!root || typeof rel !== "string" || !rel) return;
+  if (!(await readConflictedFiles(root)).includes(rel)) return;
+  const abs = path.join(root, rel);
+  try {
+    await vscode.window.showTextDocument(vscode.Uri.file(abs), { preview: false });
   } catch (e: unknown) {
-    const msg = errorMessage(e);
-    webview.postMessage({ type: "rebaseError", message: msg });
+    void vscode.window.showErrorMessage(vscode.l10n.t("Gitline: {0}", errorMessage(e)));
   }
 }
 
@@ -942,7 +996,9 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
           root?: string;
           mode?: string;
           columns?: unknown;
-          items?: Array<{ sha?: string; subject?: string; action?: string }>;
+          kind?: string;
+          step?: string;
+          items?: Array<{ sha?: string; subject?: string; action?: string; message?: string }>;
         }) => {
           // Anything that changes a repository must act on the one the graph shows.
           if (typeof msg?.type === "string" && WRITE_MESSAGES.has(msg.type) && !(await shownRepoIsActive(webview))) {
@@ -1112,25 +1168,23 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
               if (
                 raw &&
                 typeof raw.sha === "string" &&
+                /^[0-9a-f]{7,64}$/i.test(raw.sha) &&
                 typeof raw.subject === "string" &&
                 isRebaseAction(raw.action)
               ) {
-                items.push({ sha: raw.sha, subject: raw.subject, action: raw.action });
+                const message = raw.action === "reword" && typeof raw.message === "string" ? raw.message : undefined;
+                items.push({ sha: raw.sha, subject: raw.subject, action: raw.action, message });
               }
             }
             void applyRebase(webview, msg.base, items);
             return;
           }
-          if (msg?.type === "abortRebase") {
-            void abortRebaseAndReload(webview);
+          if (msg?.type === "pausedStep" && isPausedKind(msg.kind) && isPausedStep(msg.step)) {
+            void pausedStepAndReload(webview, msg.kind, msg.step);
             return;
           }
-          if (msg?.type === "continueRebase") {
-            void continueRebaseAndReload(webview);
-            return;
-          }
-          if (msg?.type === "skipRebase") {
-            void skipRebaseAndReload(webview);
+          if (msg?.type === "openConflict" && typeof msg.path === "string") {
+            void openConflictFile(msg.path);
             return;
           }
         },

@@ -3,14 +3,15 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { promisify } from "util";
-import { errorMessage } from "./errors";
 import { revExists, runGitCommand } from "./gitExec";
 
 const execFileAsync = promisify(execFile);
 
-export type RebaseAction = "pick" | "drop" | "squash" | "fixup";
-export type RebaseTodoItem = { sha: string; subject: string; action: RebaseAction };
-export type RebaseRowPreview = { sha: string; subject: string };
+export type RebaseAction = "pick" | "reword" | "drop" | "squash" | "fixup";
+/** `message` is the new commit message for `reword` (ignored otherwise). */
+export type RebaseTodoItem = { sha: string; subject: string; action: RebaseAction; message?: string };
+/** `message` is the full original message (subject and body), for the reword editor. */
+export type RebaseRowPreview = { sha: string; subject: string; message: string };
 
 /**
  * The rebase base the webview asks for is `<picked>^`. When `<picked>` is the root commit that
@@ -28,17 +29,16 @@ export async function resolveRebaseBase(cwd: string, base: string): Promise<stri
 
 /** Commits between `base` (exclusive) and HEAD, oldest first — same order git uses for rebase-todo. `null` = from the root. */
 export async function readRebaseCommits(cwd: string, base: string | null): Promise<RebaseRowPreview[]> {
-  const out = await runGitCommand(cwd, ["log", "--reverse", "--format=%H%x09%s", base === null ? "HEAD" : `${base}..HEAD`]);
+  // Unit / record separators: a message may hold tabs and newlines, never these.
+  const out = await runGitCommand(cwd, [
+    // --no-merges: `git rebase -i` leaves merge commits out of its todo (it linearizes) — list the same.
+    "log", "--reverse", "--no-merges", "--format=%H%x1f%s%x1f%B%x1e", base === null ? "HEAD" : `${base}..HEAD`,
+  ]);
   const rows: RebaseRowPreview[] = [];
-  for (const line of out.split(/\r?\n/)) {
-    const s = line.trim();
-    if (!s) continue;
-    const tab = s.indexOf("\t");
-    if (tab < 0) {
-      rows.push({ sha: s, subject: "" });
-    } else {
-      rows.push({ sha: s.slice(0, tab), subject: s.slice(tab + 1) });
-    }
+  for (const rec of out.split("\x1e")) {
+    const [sha = "", subject = "", message = ""] = rec.replace(/^\s+/, "").split("\x1f");
+    if (!sha) continue;
+    rows.push({ sha, subject, message: message.replace(/\s+$/, "") });
   }
   return rows;
 }
@@ -62,6 +62,52 @@ export async function isRebaseInProgress(cwd: string): Promise<boolean> {
   return false;
 }
 
+/** Single-quotes for the POSIX shell git runs `exec` lines with (also Git for Windows' sh). */
+function shQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+function normalizeMessage(m: string): string {
+  return m.replace(/\r\n?/g, "\n").replace(/\s+$/, "").replace(/^\s*\n/, "");
+}
+
+/**
+ * The todo git runs. A reword with a changed message becomes `pick` plus an `exec` that amends just
+ * that commit's message: git's own `reword` would open an editor we cannot tell apart from other
+ * steps, while an `exec` line carries its message with it — also when the rebase stops on a conflict
+ * first and is continued later. The message goes to `git commit -F -` through printf, one argument
+ * per line, so quotes, `#`, leading dashes and non-ASCII text reach git as typed. A reword whose
+ * message is unchanged is a plain pick. Text after the hash is a comment to git; newlines are
+ * removed from it so a subject can never start a todo line of its own.
+ */
+export function buildRebaseTodo(items: RebaseTodoItem[], originals: Record<string, string> = {}): string {
+  const lines: string[] = [];
+  for (const it of items) {
+    const subject = it.subject.replace(/[\r\n]+/g, " ");
+    const msg = typeof it.message === "string" ? normalizeMessage(it.message) : "";
+    const changed = it.action === "reword" && msg && msg !== normalizeMessage(originals[it.sha] ?? "");
+    if (it.action === "reword") {
+      lines.push(`pick ${it.sha} ${subject}`);
+      if (changed) {
+        const args = msg.split("\n").map(shQuote).join(" ");
+        // --no-verify: hooks already ran when the commit was made; a failing pre-commit / commit-msg
+        // hook here would stop the rebase on a step that, with git's defaults, is not run again.
+        lines.push(`exec printf '%s\\n' ${args} | git commit --amend --only --allow-empty --no-verify --cleanup=whitespace -F -`);
+      }
+    } else {
+      lines.push(`${it.action} ${it.sha} ${subject}`);
+    }
+  }
+  const todo = lines.join("\n") + "\n";
+  // Git for Windows runs each exec line through sh -c, bounded by the ~32K command-line limit.
+  if (lines.some((l) => l.length > MAX_EXEC_LINE)) throw new Error(REWORD_TOO_LONG);
+  return todo;
+}
+
+const MAX_EXEC_LINE = 30000;
+/** Thrown by buildRebaseTodo; the panel shows its own wording for it. */
+export const REWORD_TOO_LONG = "reword message too long";
+
 function quoteForSequenceEditor(p: string): string {
   // GIT_SEQUENCE_EDITOR is run through the shell. Single-quote on POSIX, double-quote on Windows.
   if (process.platform === "win32") {
@@ -79,15 +125,14 @@ export async function runInteractiveRebase(
   base: string | null,
   items: RebaseTodoItem[],
 ): Promise<void> {
-  const lines: string[] = [];
+  // Reworded commits' current messages: an unchanged one stays a plain pick.
+  const originals: Record<string, string> = {};
   for (const it of items) {
-    if (it.action === "drop") {
-      lines.push(`drop ${it.sha} ${it.subject}`);
-    } else {
-      lines.push(`${it.action} ${it.sha} ${it.subject}`);
+    if (it.action === "reword" && !(it.sha in originals)) {
+      originals[it.sha] = await runGitCommand(cwd, ["log", "-1", "--format=%B", it.sha, "--"]);
     }
   }
-  const todoContent = lines.join("\n") + "\n";
+  const todoContent = buildRebaseTodo(items, originals);
 
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const tmpDir = os.tmpdir();
@@ -105,7 +150,9 @@ export async function runInteractiveRebase(
   const cleanup = withNoopCommitEditor();
 
   try {
-    await execFileAsync("git", ["rebase", "-i", ...(base === null ? ["--root"] : [base])], {
+    // --reschedule-failed-exec: a reword step that fails (e.g. a lock) runs again on Continue
+    // instead of being dropped silently.
+    await execFileAsync("git", ["rebase", "-i", "--reschedule-failed-exec", ...(base === null ? ["--root"] : [base])], {
       cwd,
       maxBuffer: 16 * 1024 * 1024,
       encoding: "utf8",
@@ -148,71 +195,4 @@ function withNoopCommitEditor(): { editorCmd: string; dispose: () => void } {
       }
     },
   };
-}
-
-/** Continues a paused rebase after the user resolved conflicts in the SCM view. */
-export async function continueRebase(cwd: string): Promise<void> {
-  const cleanup = withNoopCommitEditor();
-  try {
-    await execFileAsync("git", ["rebase", "--continue"], {
-      cwd,
-      maxBuffer: 16 * 1024 * 1024,
-      encoding: "utf8",
-      env: { ...process.env, GIT_EDITOR: cleanup.editorCmd },
-    });
-  } finally {
-    cleanup.dispose();
-  }
-}
-
-/** Skips the current commit of a paused rebase. */
-export async function skipRebase(cwd: string): Promise<void> {
-  await runGitCommand(cwd, ["rebase", "--skip"]);
-}
-
-export async function abortRebase(cwd: string): Promise<void> {
-  await runGitCommand(cwd, ["rebase", "--abort"]);
-}
-
-/** What a rebase step reports to the panel. */
-export type RebaseStepMessage =
-  | { type: "rebaseDone" }
-  | { type: "rebaseError"; message: string }
-  | { type: "reloadNow" };
-
-/**
- * One step of a paused rebase (continue / skip): nothing to do if no rebase is running; otherwise
- * ask (if `confirm` is given — a "no" changes nothing), run it, and report from the *state* git is
- * left in, not from its exit code: `git rebase --continue/--skip` exits non-zero when it stops on
- * the next conflict, which is the normal "still paused" case, not a failure.
- * - no rebase any more → done (or the error, if the step failed and the rebase is gone);
- * - still paused → `stillPausedMessage` plus git's detail (which file conflicts), else the raw error.
- * Always asks for a reload. No VS Code here: the panel passes how to post and how to ask.
- */
-export async function runRebaseStep(
-  root: string,
-  step: (root: string) => Promise<unknown>,
-  post: (m: RebaseStepMessage) => void,
-  opts: { confirm?: () => Promise<boolean>; stillPausedMessage?: string } = {},
-): Promise<void> {
-  if (!(await isRebaseInProgress(root))) {
-    post({ type: "rebaseDone" });
-    post({ type: "reloadNow" });
-    return;
-  }
-  if (opts.confirm && !(await opts.confirm())) return;
-  let failure: string | undefined;
-  try {
-    await step(root);
-  } catch (e: unknown) {
-    failure = errorMessage(e);
-  }
-  if (!(await isRebaseInProgress(root))) {
-    post(failure === undefined ? { type: "rebaseDone" } : { type: "rebaseError", message: failure });
-  } else if (opts.stillPausedMessage) {
-    post({ type: "rebaseError", message: failure ? `${opts.stillPausedMessage}\n${failure}` : opts.stillPausedMessage });
-  } else if (failure !== undefined) {
-    post({ type: "rebaseError", message: failure });
-  }
-  post({ type: "reloadNow" });
 }

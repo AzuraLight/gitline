@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.8.0
+
+### Added
+
+- **Paused merges, cherry-picks and reverts get the rebase banner's treatment.** When a merge,
+  rebase, cherry-pick or revert stops on a conflict — started from Gitline or from the terminal —
+  a banner says what is being applied (`Merging: Merge branch 'feature/x'`, `Rebasing main
+  (step 2 of 5)`, `Cherry-picking: Fix login`), lists the conflicted files (click to open one and
+  use VS Code's conflict tools) and offers **Continue**, **Skip** (not for a merge) and **Abort**.
+  Continue waits while files still conflict; Abort asks first. A multi-commit cherry-pick whose
+  conflict you committed by hand still shows, so you can continue the rest.
+- **Reword in interactive rebase** ([#4](https://github.com/AzuraLight/gitline/issues/4)). Pick
+  `reword` for a commit and its full message opens below it, ready to edit; Apply rewrites the
+  message and leaves the files alone. Quotes, `#` lines, several paragraphs and any language are
+  kept as typed, the new message survives a conflict on the way, and commit hooks that would
+  reject the old commit do not drop it.
+- **Annotated tags.** Creating a tag now also asks for a message: with one you get an annotated
+  tag (`git tag -a`), left empty a lightweight tag as before.
+
+### Changed
+
+- A merge, cherry-pick or revert started from the graph that stops on conflicts now explains
+  what happened and points to the banner, instead of showing Git's raw error. Other errors still
+  show Git's own message.
+- Continue never opens a commit-message editor: it keeps the message Git prepared (`Merge branch
+  …`, the picked commit's message), as Continue already did for a rebase.
+- The interactive rebase editor leaves merge commits out of its list, as `git rebase -i` does;
+  before, applying a list with a merge commit stopped with an error.
+- Starting an interactive rebase while another operation is paused says so up front.
+
+### Fixed
+
+- Errors from the rebase banner's buttons were not shown anywhere; they now appear in the banner.
+- Commit subjects are cleaned before they go into the rebase todo, so an odd subject can never
+  add a line of its own.
+
 ## 1.7.0
 
 ### Added

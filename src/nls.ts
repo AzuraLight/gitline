@@ -75,7 +75,21 @@ export type CommitGraphWebviewUi = {
   revMissingNotice: string;
   revNoMatchNotice: string;
   dismissNoticeTitle: string;
-  rebaseInProgressNotice: string;
+  opBannerAria: string;
+  rebaseMessageAria: string;
+  rebaseActionAria: string;
+  opAbort: string;
+  opSkipTitle: string;
+  opConflictedFilesAria: string;
+  opRebasing: string;
+  opRebasePaused: string;
+  opMerging: string;
+  opCherryPicking: string;
+  opReverting: string;
+  opProgress: string;
+  opConflicts: string;
+  opResolved: string;
+  opOpenFileTitle: string;
   rebaseContinue: string;
   rebaseSkip: string;
   repoPickerTitle: string;
@@ -164,7 +178,21 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     revMissingNotice: vscode.l10n.t("“{0}” no longer exists — showing the default history instead."),
     revNoMatchNotice: vscode.l10n.t("No branch matches {0} in this repository — showing the default history instead."),
     dismissNoticeTitle: vscode.l10n.t("Dismiss"),
-    rebaseInProgressNotice: vscode.l10n.t("A rebase is paused. Resolve conflicts in the SCM view, then continue."),
+    opBannerAria: vscode.l10n.t("Paused Git operation"),
+    rebaseMessageAria: vscode.l10n.t("Commit message"),
+    rebaseActionAria: vscode.l10n.t("Action"),
+    opAbort: vscode.l10n.t("Abort"),
+    opSkipTitle: vscode.l10n.t("Leave out the current commit and go on"),
+    opConflictedFilesAria: vscode.l10n.t("Conflicted files"),
+    opRebasing: vscode.l10n.t("Rebasing {0}"),
+    opRebasePaused: vscode.l10n.t("Rebase paused"),
+    opMerging: vscode.l10n.t("Merging: {0}"),
+    opCherryPicking: vscode.l10n.t("Cherry-picking: {0}"),
+    opReverting: vscode.l10n.t("Reverting: {0}"),
+    opProgress: vscode.l10n.t("step {0} of {1}"),
+    opConflicts: vscode.l10n.t("{0} conflicted file(s) — resolve and stage them in Source Control, then Continue"),
+    opResolved: vscode.l10n.t("No conflicts left — Continue to finish"),
+    opOpenFileTitle: vscode.l10n.t("Open the file to resolve its conflicts"),
     rebaseContinue: vscode.l10n.t("Continue"),
     rebaseSkip: vscode.l10n.t("Skip"),
     repoPickerTitle: vscode.l10n.t("Switch repository"),

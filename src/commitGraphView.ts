@@ -158,14 +158,16 @@ export function buildCommitGraphShellHtml(
       <span id="rev-notice-text" class="gv-rev-notice__text"></span>
       <button type="button" id="btn-dismiss-notice" class="gv-rev-notice__close" title="${escapeHtml(ui.dismissNoticeTitle)}" aria-label="${escapeHtml(ui.dismissNoticeTitle)}">✕</button>
     </div>
-    <div id="rebase-banner" class="gv-rebase-banner" hidden role="status" aria-live="polite">
+    <div id="op-banner" class="gv-rebase-banner gv-op-banner" hidden role="region" aria-label="${escapeHtml(ui.opBannerAria)}">
       <span class="gv-rebase-banner__icon" aria-hidden="true">⎇</span>
-      <span class="gv-rebase-banner__text">${escapeHtml(ui.rebaseInProgressNotice)}</span>
+      <span id="op-banner-text" class="gv-rebase-banner__text" role="status" aria-live="polite"></span>
       <span class="gv-rebase-banner__actions">
-        <button type="button" id="btn-rebase-continue" class="gv-rebase-banner__btn gv-rebase-banner__btn--primary">${escapeHtml(ui.rebaseContinue)}</button>
-        <button type="button" id="btn-rebase-skip" class="gv-rebase-banner__btn">${escapeHtml(ui.rebaseSkip)}</button>
-        <button type="button" id="btn-rebase-abort2" class="gv-rebase-banner__btn gv-rebase-banner__btn--danger">${escapeHtml(ui.rebaseAbort)}</button>
+        <button type="button" id="btn-op-continue" class="gv-rebase-banner__btn gv-rebase-banner__btn--primary">${escapeHtml(ui.rebaseContinue)}</button>
+        <button type="button" id="btn-op-skip" class="gv-rebase-banner__btn" title="${escapeHtml(ui.opSkipTitle)}">${escapeHtml(ui.rebaseSkip)}</button>
+        <button type="button" id="btn-op-abort" class="gv-rebase-banner__btn gv-rebase-banner__btn--danger">${escapeHtml(ui.opAbort)}</button>
       </span>
+      <div id="op-banner-detail" class="gv-op-banner__detail" role="alert" hidden></div>
+      <ul id="op-banner-files" class="gv-op-banner__files" aria-label="${escapeHtml(ui.opConflictedFilesAria)}" hidden></ul>
     </div>
   </header>
   <main class="gv-panel-main gv-workspace-root">

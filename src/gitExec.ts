@@ -19,7 +19,7 @@ const execFileAsync = promisify(execFile);
 const NETWORK_TIMEOUT_MS = 120_000;
 
 /** input: written to git's stdin (e.g. revisions for `--stdin`, which has no command-line length limit). */
-type ExecOptions = { maxBuffer?: number; timeoutMs?: number; input?: string };
+type ExecOptions = { maxBuffer?: number; timeoutMs?: number; input?: string; env?: Record<string, string> };
 
 /**
  * Every git invocation goes through here, with explicit argv (no shell).
@@ -34,7 +34,7 @@ async function execGit(cwd: string, args: string[], options: ExecOptions = {}): 
       maxBuffer: options.maxBuffer ?? 10 * 1024 * 1024,
       timeout: options.timeoutMs ?? 0,
       encoding: "utf8",
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", ...options.env },
     });
     // Always close stdin: a command that does not read it must not wait on an open pipe. If git
     // exits before reading a large input the write fails with EPIPE; the exit status already
@@ -108,6 +108,16 @@ export function repoRelativePath(repoRoot: string, fsPath: string): string {
 /** Runs `git` for local operations. cwd must be the repository root. */
 export async function runGitCommand(cwd: string, args: string[]): Promise<string> {
   return execGit(cwd, args);
+}
+
+/** Runs `git` with `input` on stdin (e.g. a tag message given as `-F -`). */
+export async function runGitWithInput(cwd: string, args: string[], input: string): Promise<string> {
+  return execGit(cwd, args, { input });
+}
+
+/** Runs `git` without ever opening an editor: GIT_EDITOR=":" makes git keep the message it prepared. */
+export async function runGitNoEditor(cwd: string, args: string[]): Promise<string> {
+  return execGit(cwd, args, { env: { GIT_EDITOR: ":" } });
 }
 
 /** Runs `git` for operations that talk to a remote — bounded by {@link NETWORK_TIMEOUT_MS}. */

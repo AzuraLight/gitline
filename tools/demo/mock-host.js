@@ -137,6 +137,8 @@
   var BRANCH_NAMES = ["main", "feature/search", "feature/checkout", "fix/cart-total", "origin/main", "origin/feature/search"];
 
   var display = (window.__GV_DEMO_DISPLAY__) || {};
+  // A paused merge / rebase / cherry-pick / revert for the banner (set before the page loads).
+  var paused = window.__GV_DEMO_PAUSED__ || null;
 
   function graphPayload(req) {
     // Same views as the extension: HEAD's own log, every branch (":all"), one branch, or several
@@ -194,6 +196,7 @@
       revMissing: revMissing,
       requestedRevs: revs,
       onHeadKnown: !!revs.length && !revMissing,
+      paused: paused,
       // As in the extension: a deleted single branch is dropped; a list that matches nothing is kept.
       dropSelection: !!revMissing && revs.length === 1 && revs[0].indexOf("*") < 0,
       revMissingIsList: !!revMissing && (revs.length > 1 || revs[0].indexOf("*") >= 0),
@@ -223,6 +226,28 @@
   var HANDLERS = {
     requestGraph: function (m) { reply({ type: "graphPayload", payload: graphPayload(m) }); },
     // Like the settings round trip: the column menu writes gitline.graph.columns, the host echoes it.
+    // Like the extension: continue is refused while files conflict; abort / skip / a clean continue end it.
+    pausedStep: function (m) {
+      if (!paused || m.kind !== paused.kind) { reply({ type: "opDone" }); reply({ type: "reloadNow" }); return; }
+      if (m.step === "continue" && paused.conflicted.length) {
+        reply({ type: "opError", message: paused.conflicted.length + " file(s) still have conflicts. Resolve them and stage them (+) in Source Control, then continue." });
+        return;
+      }
+      paused = null;
+      reply({ type: "opDone" });
+      reply({ type: "reloadNow" });
+    },
+    openConflict: function () {},
+    // Interactive rebase: the commits after the picked one (oldest first) with their full messages.
+    requestRebaseCommits: function (m) {
+      var sha = String(m.base || "").replace(/\^$/, "");
+      var idx = commits.findIndex(function (c) { return c.hash === sha; });
+      var list = (idx >= 0 ? commits.slice(0, idx + 1) : []).filter(function (c) { return !c.offHead && !(c.parents && c.parents.length > 1); }).reverse(); // as git rebase -i: no merges
+      reply({ type: "rebaseCommits", base: m.base, commits: list.map(function (c) {
+        return { sha: c.hash, subject: c.subject, message: c.subject + (c.parents && c.parents.length > 1 ? "" : "\n\nDetails of " + c.hash.slice(0, 7)) };
+      }) });
+    },
+    applyRebase: function () { reply({ type: "rebaseDone" }); reply({ type: "reloadNow" }); },
     setColumns: function (m) {
       display = Object.assign({}, display, { columns: m.columns });
       reply({ type: "displayPrefs", display: display });

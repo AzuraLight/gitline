@@ -435,7 +435,7 @@
     // Full ref names a multi-branch / pattern selection resolved to — the sidebar marks them selected.
     S.viewRefs = Array.isArray(payload.viewRefs) ? payload.viewRefs : [];
     S.currentBranch = (payload.branchTree && payload.branchTree.current) || "";
-    u.setHidden($("rebase-banner"), !payload.rebaseInProgress);
+    renderPaused(payload.paused || null);
     u.setHidden($("branch-bar"), false);
     branchTree.render(payload.branchTree || { current: "", locals: [], remotes: [] });
     S.repoList = Array.isArray(payload.repos) ? payload.repos : [];
@@ -458,10 +458,82 @@
     reopenCurrentCommit(commits);
   }
 
+  // ---- Paused merge / rebase / cherry-pick / revert: banner, buttons, conflicted files --------
+
+  var paused = null; // the operation the banner shows; its buttons act on that kind only
+
+  function fill(template, a, b) {
+    return String(template || "").replace("{0}", a == null ? "" : String(a)).replace("{1}", b == null ? "" : String(b));
+  }
+
+  /** "Merging: Merge branch 'x' · 2 conflicted files …" — pure, so the demo and tests read the same. */
+  function pausedText(p) {
+    var subject = p.subject || "";
+    var head;
+    if (p.kind === "rebase") head = subject ? fill(UI.opRebasing || "Rebasing {0}", subject) : (UI.opRebasePaused || "Rebase paused");
+    else if (p.kind === "merge") head = fill(UI.opMerging || "Merging: {0}", subject);
+    else if (p.kind === "cherry-pick") head = fill(UI.opCherryPicking || "Cherry-picking: {0}", subject);
+    else head = fill(UI.opReverting || "Reverting: {0}", subject);
+    if (p.total > 0 && p.step > 0) head += " (" + fill(UI.opProgress || "step {0} of {1}", p.step, p.total) + ")";
+    var n = (p.conflicted || []).length;
+    var tail = n ? fill(UI.opConflicts || "{0} conflicted file(s)", n) : (UI.opResolved || "No conflicts left — Continue to finish");
+    return head + " · " + tail;
+  }
+
+  function showOpDetail(message) {
+    var el = $("op-banner-detail");
+    if (!el) return;
+    el.textContent = message || "";
+    u.setHidden(el, !message);
+  }
+
+  function renderPaused(p) {
+    var banner = $("op-banner");
+    if (!banner) return;
+    var changed = !p || !paused || p.kind !== paused.kind;
+    paused = p && p.kind ? p : null;
+    setOpBusy(false);
+    u.setHidden(banner, !paused);
+    if (changed) showOpDetail(""); // a message belongs to the operation it was about
+    if (!paused) return;
+    $("op-banner-text").textContent = pausedText(paused);
+    u.setHidden($("btn-op-skip"), paused.kind === "merge"); // git merge has no --skip
+    var list = $("op-banner-files");
+    list.textContent = "";
+    (paused.conflicted || []).slice(0, 20).forEach(function (f) {
+      var li = u.el("li", "gv-op-banner__file");
+      var btn = u.el("button", "gv-op-banner__file-btn", f);
+      btn.type = "button";
+      btn.title = UI.opOpenFileTitle || "Open the file to resolve its conflicts";
+      btn.addEventListener("click", function () { post("openConflict", { path: f }); });
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+    var more = (paused.conflicted || []).length - 20;
+    if (more > 0) list.appendChild(u.el("li", "gv-op-banner__more", "+" + more));
+    u.setHidden(list, !(paused.conflicted || []).length);
+  }
+
+  /** While a step runs the buttons wait (a second click would start git again); any answer frees them. */
+  function setOpBusy(busy) {
+    ["btn-op-continue", "btn-op-skip", "btn-op-abort"].forEach(function (id) {
+      var b = $(id);
+      if (b) b.disabled = busy;
+    });
+    var banner = $("op-banner");
+    if (banner) banner.setAttribute("aria-busy", busy ? "true" : "false");
+  }
+
+  function pausedStep(step) {
+    if (!paused) return;
+    setOpBusy(true);
+    post("pausedStep", { kind: paused.kind, step: step });
+  }
+
   function renderGraphError(code, message) {
     commitList.clear();
     hideRevNotice();
-    u.setHidden($("rebase-banner"), true);
+    renderPaused(null);
     u.setHidden($("branch-bar"), true);
     if (code === "no-repo") showEmptyCard(UI.emptyNoRepoTitle || "", UI.emptyNoRepoBody || "");
     else showEmptyCard(UI.emptyErrorTitle || "", message || UI.errorGeneric || "");
@@ -493,6 +565,17 @@
     rebaseCommits: function (d) { rebaseEditor.setCommits(d.commits); },
     rebaseError: function (d) { rebaseEditor.showError(d.message); },
     rebaseDone: function () { rebaseEditor.close(); },
+    // A step's answer. When the rebase editor's own Abort asked, the answer goes back to the editor.
+    opError: function (d) {
+      setOpBusy(false);
+      if (S.editorAbort) { S.editorAbort = false; rebaseEditor.showError(d.message); return; }
+      showOpDetail(d.message);
+    },
+    opDone: function () {
+      setOpBusy(false);
+      showOpDetail("");
+      if (S.editorAbort) { S.editorAbort = false; rebaseEditor.close(); }
+    },
     // "Open in Gitline graph" from inline blame: search for the SHA and open that commit.
     revealCommit: function (d) {
       if (typeof d.hash !== "string" || !d.hash) return;
@@ -584,9 +667,9 @@
   onClick("btn-push", function () { post("runSync", { op: "push" }); });
   onClick("btn-fetch", function () { post("runSync", { op: "fetch" }); });
 
-  onClick("btn-rebase-continue", function () { post("continueRebase", {}); });
-  onClick("btn-rebase-skip", function () { post("skipRebase", {}); });
-  onClick("btn-rebase-abort2", function () { post("abortRebase", {}); });
+  onClick("btn-op-continue", function () { pausedStep("continue"); });
+  onClick("btn-op-skip", function () { pausedStep("skip"); });
+  onClick("btn-op-abort", function () { pausedStep("abort"); });
 
   $("repo-path").addEventListener("click", function (ev) {
     ev.stopPropagation();

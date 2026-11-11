@@ -1,4 +1,4 @@
-import { runGitCommand, runGitNetworkCommand } from "./gitExec";
+import { runGitCommand, runGitNetworkCommand, runGitWithInput } from "./gitExec";
 
 const COMMIT_ACTION_IDS = [
   "checkout-detached",
@@ -190,9 +190,19 @@ export async function createBranchFrom(cwd: string, name: string, refspec: strin
 }
 
 /** Lightweight tag at `<refspec>`. */
-export async function createTagAt(cwd: string, name: string, refspec: string): Promise<void> {
+/**
+ * Creates a tag. With a message it is an annotated tag (`git tag -a`, the kind `git describe` and
+ * release tooling use); without one, a lightweight tag as before. The message goes in through `-F -`
+ * (stdin), so any text — leading dashes, quotes, several lines — is taken as is.
+ */
+export async function createTagAt(cwd: string, name: string, refspec: string, message?: string): Promise<void> {
   const t = assertRefName(name);
-  await runGitCommand(cwd, ["tag", t, refspec]);
+  const msg = typeof message === "string" ? message.trim() : "";
+  if (!msg) {
+    await runGitCommand(cwd, ["tag", t, refspec]);
+    return;
+  }
+  await runGitWithInput(cwd, ["tag", "-a", t, "-F", "-", refspec], msg + "\n");
 }
 
 export async function renameBranch(cwd: string, oldName: string, newName: string): Promise<void> {

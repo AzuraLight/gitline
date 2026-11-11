@@ -70,7 +70,18 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 ### Compare and rewrite
 
 - **Compare two commits** — mark a commit, then "Compare with marked" on another to see the changed files or full patch between them.
-- **Interactive rebase** — right-click a commit → *Interactive rebase from here…* opens an in-panel todo editor (reorder, `pick` / `squash` / `fixup` / `drop`). When a rebase pauses on a conflict, a banner offers **Continue / Skip / Abort** after you resolve in the SCM view.
+- **Interactive rebase** — right-click a commit → *Interactive rebase from here…* opens an in-panel todo editor: reorder, `pick` / `reword` / `squash` / `fixup` / `drop`. **Reword** opens the commit's full message right there to edit; the files stay as they were.
+- **Paused merge, rebase, cherry-pick or revert** — when one stops on a conflict, a banner says what is being applied (`Merging: Merge branch 'feature/x'`, `Rebasing main (step 2 of 5)`) and lists the conflicted files; click one to open it and resolve it with VS Code's conflict tools. Stage the resolved files in Source Control, then **Continue**, **Skip** (not for a merge) or **Abort** from the banner. Continue waits while files still conflict, and keeps the message Git prepared instead of opening an editor.
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/paused-banner-light.png">
+  <img src="docs/images/paused-banner-dark.png" width="640" alt="A paused merge: the banner reads Merging: Merge branch 'feature/checkout', 2 conflicted files, lists both files as buttons, and offers Continue and Abort">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/reword-light.png">
+  <img src="docs/images/reword-dark.png" width="640" alt="The interactive rebase editor with one commit set to reword and its message being edited in place below it">
+</picture>
 
 ### Inline blame (opt-in)
 
@@ -90,7 +101,7 @@ Off by default. Turn it on with the `gitline.inlineBlame.enabled` setting or **G
 | **Remote branch** | Create tracking branch · Fetch · Merge · Delete on remote · Copy name |
 | **Stash** | Apply · Pop · Drop · Copy ref |
 
-Destructive actions show a modal confirmation. Branch/tag creation and rename prompt for the name.
+Destructive actions show a modal confirmation. Branch/tag creation and rename prompt for the name. A new tag also asks for a message: type one for an **annotated tag**, or leave it empty for a lightweight one.
 
 ## Getting started
 
@@ -153,12 +164,9 @@ All `gitline.graph.*` settings are window-scoped: set them in user or workspace 
 
 ## Limitations
 
-- Working-tree writes (commit / amend / stash push) are delegated to the SCM view.
-- Merge and cherry-pick conflicts surface raw Git errors; only rebase has an
-  in-panel Continue / Skip / Abort recovery banner.
-- Tags are lightweight only (no annotated tags yet).
-
-These are on the roadmap.
+- Working-tree writes (commit / amend / stash push) are delegated to the SCM view, and so is
+  resolving conflicts themselves (Gitline opens the conflicted file for you).
+- A paused `git am` session gets no banner; finish it from the terminal.
 
 ## Contributing
 
