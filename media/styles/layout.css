@@ -313,3 +313,78 @@ body.gv-resizing * {
   font-size: 0.84em;
   color: var(--gv-muted);
 }
+
+/* --- Details below the graph (gitline.graph.detailsLocation = bottom, or auto in a tall panel) --- */
+
+.gv-shell .gv-graph-workspace.gv-details-bottom {
+  flex-direction: column;
+}
+
+.gv-shell .gv-details-bottom > .gv-pane-log {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 120px;
+  border-right: none;
+}
+
+.gv-shell .gv-details-bottom > .gv-pane-preview {
+  flex: 0 1 var(--gv-preview-h, 40%);
+  height: var(--gv-preview-h, 40%);
+  width: auto;
+  min-width: 0;
+  min-height: 120px;
+  border-right: none;
+}
+
+.gv-shell .gv-details-bottom > .gv-pane-log.gv-collapsed ~ .gv-pane-preview {
+  flex: 1 1 0;
+  height: auto;
+}
+
+/* A collapsed pane is a full-width strip with its title written normally. */
+.gv-shell .gv-details-bottom > .gv-collapsible.gv-collapsed {
+  flex: 0 0 var(--gv-collapsed-w, 28px) !important;
+  height: var(--gv-collapsed-w, 28px) !important;
+  width: auto !important;
+  min-height: 0 !important;
+}
+
+.gv-shell .gv-details-bottom > .gv-collapsible.gv-collapsed > .gv-collapsible__head {
+  flex-direction: row;
+  justify-content: flex-start;
+  padding: 0 var(--gv-space-2);
+}
+
+.gv-shell .gv-details-bottom > .gv-collapsible.gv-collapsed .gv-collapsible__title {
+  writing-mode: horizontal-tb;
+}
+
+.gv-shell .gv-details-bottom > .gv-splitter {
+  flex: 0 0 5px;
+  margin: -2px 0;
+  cursor: row-resize;
+}
+
+.gv-shell .gv-details-bottom > .gv-splitter::after {
+  top: 2px;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: auto;
+  height: 1px;
+}
+
+.gv-shell .gv-details-bottom > .gv-splitter:hover::after,
+.gv-shell .gv-details-bottom > .gv-splitter--dragging::after,
+.gv-shell .gv-details-bottom > .gv-splitter:focus-visible::after {
+  top: 1px;
+  left: 0;
+  width: auto;
+  height: 3px;
+}
+
+body.gv-resizing-rows,
+body.gv-resizing-rows * {
+  cursor: row-resize !important;
+  user-select: none !important;
+}

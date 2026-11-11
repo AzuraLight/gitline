@@ -149,8 +149,10 @@
       var right = u.el("div", "gv-row-right");
       var author = u.el("span", "gv-author", c.author);
       author.title = c.author;
-      var when = u.el("span", "gv-time", u.formatTime(c.dateSec));
-      when.title = u.formatTimeFull(c.dateSec);
+      var date = GV.display.dateText(c.dateSec);
+      var when = u.el("span", "gv-time", date.text);
+      when.title = date.title;
+      when.setAttribute("data-sec", String(c.dateSec || 0)); // re-labelled when the date format changes
       var hash = u.el("code", "gv-hash", c.hash.slice(0, 7));
       hash.style.setProperty("--gv-hash-color", color);
       right.appendChild(author);
@@ -194,11 +196,11 @@
       var graphOffset = renderVirtualRows(payload, graphWidth) * METRICS.rowH;
       drawGraph(commits, layout, graphWidth, graphOffset);
       if (canvas) canvas.style.setProperty("--gv-graph-w", graphWidth + "px");
-      mountVirtualList(commits, layout, graphWidth, graphOffset);
+      mountVirtualList(commits, layout, graphWidth, graphOffset, !!payload.onHeadKnown);
       return true;
     }
 
-    function mountVirtualList(commits, layout, graphWidth, graphOffset) {
+    function mountVirtualList(commits, layout, graphWidth, graphOffset, onHeadKnown) {
       var ROW_H = METRICS.rowH;
       var list = u.el("div", "gv-commit-list-inner");
       var topSpacer = u.el("div", "gv-spacer");
@@ -270,6 +272,9 @@
           // Dimming is visual only; screen readers get the same fact as a description.
           row.classList.add("gv-unified-row--offhead");
           row.setAttribute("aria-description", UI.commitNotOnHead || "Not on the current branch");
+        } else if (onHeadKnown) {
+          // On the current branch in a view that also shows others; tinted when the setting is on.
+          row.classList.add("gv-unified-row--onhead");
         }
         row.appendChild(buildCommitCell(c, u.laneColor(lane)));
         row.addEventListener("click", function () {

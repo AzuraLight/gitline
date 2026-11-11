@@ -21,5 +21,17 @@
   "config.graph.defaultView.current": "현재 브랜치(HEAD).",
   "config.graph.defaultView.all": "모든 로컬·원격 브랜치와 태그. 현재 브랜치에 없는 커밋은 흐리게 표시됩니다.",
   "config.graph.defaultView.selected": "`#gitline.graph.defaultBranches#`에 적은 브랜치.",
-  "config.graph.defaultBranches": "`#gitline.graph.defaultView#`가 `selected`일 때 보여줄 브랜치입니다. 로컬(`main`), 원격(`origin/main`), 태그 이름이나, `*`가 경로 한 단계 안에서만 맞는 패턴(`origin/team/*`)을 쓸 수 있습니다. 저장소에 없는 이름은 건너뜁니다. 팁: 사이드바에서 Ctrl/Cmd+클릭으로 브랜치를 고른 뒤 **Gitline: 현재 보기를 기본값으로 저장**을 실행하세요."
+  "config.graph.defaultBranches": "`#gitline.graph.defaultView#`가 `selected`일 때 보여줄 브랜치입니다. 로컬(`main`), 원격(`origin/main`), 태그 이름이나, `*`가 경로 한 단계 안에서만 맞는 패턴(`origin/team/*`)을 쓸 수 있습니다. 저장소에 없는 이름은 건너뜁니다. 팁: 사이드바에서 Ctrl/Cmd+클릭으로 브랜치를 고른 뒤 **Gitline: 현재 보기를 기본값으로 저장**을 실행하세요.",
+  "config.graph.columns": "그래프에서 각 커밋 오른쪽에 보일 열입니다. 그래프 열 머리글을 마우스 오른쪽 클릭해서 켜고 끌 수도 있습니다. 창이 좁으면 메시지가 보이도록 작성자·날짜·해시가 차례로 숨겨지는 동작은 그대로입니다.",
+  "config.graph.columns.author": "커밋 작성자를 표시합니다.",
+  "config.graph.columns.date": "커밋 날짜를 표시합니다.",
+  "config.graph.columns.sha": "짧은 커밋 해시를 표시합니다.",
+  "config.graph.dateFormat": "그래프에 커밋 날짜를 표시하는 방식입니다. 날짜에 마우스를 올리면 다른 형식이 보입니다.",
+  "config.graph.dateFormat.relative": "상대 시간: `3시간 전`, `2일 전`.",
+  "config.graph.dateFormat.absolute": "현지 시각의 절대 시간: `2026-11-11 14:05`.",
+  "config.graph.detailsLocation": "커밋 상세(변경된 파일) 창의 위치입니다.",
+  "config.graph.detailsLocation.auto": "패널이 좁고(640px 미만) 높이가 충분하면 그래프 아래, 그 밖에는 오른쪽.",
+  "config.graph.detailsLocation.right": "항상 그래프 오른쪽.",
+  "config.graph.detailsLocation.bottom": "항상 그래프 아래.",
+  "config.graph.highlightCurrentBranch": "그래프가 다른 브랜치도 함께 보여 줄 때(예: 모든 브랜치 보기) 현재 브랜치의 커밋(`HEAD`에서 닿는 커밋)에 옅은 배경색을 칠합니다."
 }

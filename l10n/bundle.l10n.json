@@ -145,5 +145,9 @@
   "Open Repository": "Open Repository",
   "Gitline: Open Repository": "Gitline: Open Repository",
   "“{0}” is not inside a Git repository.": "“{0}” is not inside a Git repository.",
-  "The repository changed since the graph was drawn — now showing {0}. Please try again.": "The repository changed since the graph was drawn — now showing {0}. Please try again."
+  "The repository changed since the graph was drawn — now showing {0}. Please try again.": "The repository changed since the graph was drawn — now showing {0}. Please try again.",
+  "Author": "Author",
+  "Date": "Date",
+  "SHA": "SHA",
+  "Right-click to show or hide columns": "Right-click to show or hide columns"
 }

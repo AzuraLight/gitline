@@ -145,5 +145,9 @@
   "Open Repository": "저장소 열기",
   "Gitline: Open Repository": "Gitline: 저장소 열기",
   "“{0}” is not inside a Git repository.": "“{0}”은(는) Git 저장소 안에 있지 않습니다.",
-  "The repository changed since the graph was drawn — now showing {0}. Please try again.": "그래프를 그린 뒤 저장소가 바뀌었습니다. 지금은 {0}을(를) 보여 줍니다. 다시 시도하세요."
+  "The repository changed since the graph was drawn — now showing {0}. Please try again.": "그래프를 그린 뒤 저장소가 바뀌었습니다. 지금은 {0}을(를) 보여 줍니다. 다시 시도하세요.",
+  "Author": "작성자",
+  "Date": "날짜",
+  "SHA": "SHA",
+  "Right-click to show or hide columns": "마우스 오른쪽 클릭으로 열 표시/숨기기"
 }

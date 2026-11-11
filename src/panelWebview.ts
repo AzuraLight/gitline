@@ -1,7 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { errorMessage } from "./errors";
-import { buildCommitGraphShellHtml } from "./commitGraphView";
+import { buildCommitGraphShellHtml, type DisplayPrefs } from "./commitGraphView";
 import { commitFileUri, commitShowUri, compareShowUri } from "./commitShowProvider";
 import {
   readBranchTreePayload,
@@ -113,6 +113,43 @@ const GRAPH_CONFIG = "gitline.graph";
 function configuredDefaultRevs(): string[] {
   const config = vscode.workspace.getConfiguration(GRAPH_CONFIG);
   return revsForDefaultView(config.get("defaultView"), config.get("defaultBranches"));
+}
+
+/** Display settings (columns, dates, details location, tint) as the webview reads them. */
+export function readDisplayPrefs(): DisplayPrefs {
+  const c = vscode.workspace.getConfiguration(GRAPH_CONFIG);
+  return {
+    columns: c.get("columns"),
+    dateFormat: c.get("dateFormat"),
+    detailsLocation: c.get("detailsLocation"),
+    highlightCurrentBranch: c.get("highlightCurrentBranch"),
+  };
+}
+
+const DISPLAY_KEYS = ["columns", "dateFormat", "detailsLocation", "highlightCurrentBranch"];
+
+/** Display settings changed: the open panel restyles at once, without reading git again. */
+function applyDisplayConfigChange(ev: vscode.ConfigurationChangeEvent): void {
+  if (!panelViewRef || !DISPLAY_KEYS.some((k) => ev.affectsConfiguration(`${GRAPH_CONFIG}.${k}`))) return;
+  void panelViewRef.webview.postMessage({ type: "displayPrefs", display: readDisplayPrefs() });
+}
+
+/**
+ * The column menu in the graph header writes `gitline.graph.columns` where it is set now (workspace
+ * when the workspace has a value, otherwise user settings), so the change is not shadowed.
+ */
+export async function writeColumns(value: unknown): Promise<void> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return;
+  const v = value as Record<string, unknown>;
+  const columns = { author: v.author !== false, date: v.date !== false, sha: v.sha !== false };
+  const allShown = columns.author && columns.date && columns.sha;
+  const config = vscode.workspace.getConfiguration(GRAPH_CONFIG);
+  const inspected = config.inspect("columns");
+  const target = inspected?.workspaceValue !== undefined
+    ? vscode.ConfigurationTarget.Workspace
+    : vscode.ConfigurationTarget.Global;
+  // Everything shown again is the default: remove the entry instead of writing it out.
+  await config.update("columns", allShown && target === vscode.ConfigurationTarget.Global ? undefined : columns, target);
 }
 
 /** The default view in effect when the settings were last looked at; a change must differ from it. */
@@ -568,6 +605,9 @@ async function sendGraphPayload(
         dropSelection,
         revMissingIsList: revMissing !== undefined && sel.kind === "list",
         rebaseInProgress,
+        // The view shows more than HEAD's history, so "on the current branch" means something.
+        // At the cap the list is cut short, so older rows missing from it may not be on HEAD: no tint.
+        onHeadKnown: offHead !== undefined && offHead.size < OFF_HEAD_CAP,
         sync,
         pathFilter: pf ?? "",
         query: q ?? "",
@@ -876,6 +916,7 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
       webview.html = buildCommitGraphShellHtml(webview, context.extensionUri, ui, htmlLang, {
         fileView: readFileViewPref(),
         openingRevs: readConfiguredOpeningRevs(),
+        display: readDisplayPrefs(),
       });
 
       webview.onDidReceiveMessage(
@@ -900,6 +941,7 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
           op?: string;
           root?: string;
           mode?: string;
+          columns?: unknown;
           items?: Array<{ sha?: string; subject?: string; action?: string }>;
         }) => {
           // Anything that changes a repository must act on the one the graph shows.
@@ -936,6 +978,14 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
             (msg.op === "pull" || msg.op === "push" || msg.op === "fetch")
           ) {
             void dispatchSyncOp(webview, msg.op);
+            return;
+          }
+          if (msg?.type === "setColumns") {
+            void writeColumns(msg.columns).catch((e) => {
+              void vscode.window.showErrorMessage(errorMessage(e));
+              // The webview already shows the change: put it back to what the settings say.
+              void webview.postMessage({ type: "displayPrefs", display: readDisplayPrefs() });
+            });
             return;
           }
           if (msg?.type === "saveViewAsDefault") {
@@ -1118,6 +1168,7 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.workspace.onDidChangeConfiguration(applyGraphConfigChange),
+    vscode.workspace.onDidChangeConfiguration(applyDisplayConfigChange),
     vscode.workspace.onDidChangeConfiguration((ev) => {
       if (ev.affectsConfiguration("gitline.repositories")) invalidateRepoScan();
     }),

@@ -21,5 +21,17 @@
   "config.graph.defaultView.current": "The current branch (HEAD).",
   "config.graph.defaultView.all": "Every local and remote branch and tag. Commits not on the current branch are dimmed.",
   "config.graph.defaultView.selected": "The branches listed in `#gitline.graph.defaultBranches#`.",
-  "config.graph.defaultBranches": "Branches for `#gitline.graph.defaultView#` = `selected`: local (`main`), remote (`origin/main`) or tag names, or patterns where `*` matches within one path segment (`origin/team/*`). Names that don't exist in a repository are skipped. Tip: Ctrl/Cmd+click branches in the sidebar, then run **Gitline: Save Current View as Default**."
+  "config.graph.defaultBranches": "Branches for `#gitline.graph.defaultView#` = `selected`: local (`main`), remote (`origin/main`) or tag names, or patterns where `*` matches within one path segment (`origin/team/*`). Names that don't exist in a repository are skipped. Tip: Ctrl/Cmd+click branches in the sidebar, then run **Gitline: Save Current View as Default**.",
+  "config.graph.columns": "Columns shown at the right of each commit in the graph. You can also right-click the graph's column header to show or hide them. In a narrow pane, author, date and hash still give way to the message.",
+  "config.graph.columns.author": "Show the commit author.",
+  "config.graph.columns.date": "Show the commit date.",
+  "config.graph.columns.sha": "Show the short commit hash.",
+  "config.graph.dateFormat": "How commit dates read in the graph. Hover a date for the other form.",
+  "config.graph.dateFormat.relative": "Relative: `3h ago`, `2d ago`.",
+  "config.graph.dateFormat.absolute": "Absolute, in local time: `2026-11-11 14:05`.",
+  "config.graph.detailsLocation": "Where the commit details (changed files) sit next to the graph.",
+  "config.graph.detailsLocation.auto": "Below the graph when the panel is narrow (under 640 px) and tall enough, otherwise to the right.",
+  "config.graph.detailsLocation.right": "Always to the right of the graph.",
+  "config.graph.detailsLocation.bottom": "Always below the graph.",
+  "config.graph.highlightCurrentBranch": "Tint the commits of the current branch (reachable from `HEAD`) when the graph also shows other branches, e.g. in the All branches view."
 }

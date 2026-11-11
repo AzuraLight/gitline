@@ -3,7 +3,14 @@ import type { CommitGraphWebviewUi } from "./nls";
 
 /** Per-workspace view preferences the webview needs before its first render. */
 /** openingRevs: the view to open with (from settings), or null to restore the webview's own state. */
-export type CommitGraphPrefs = { fileView: "list" | "tree"; openingRevs?: string[] | null };
+/** Raw `gitline.graph` display settings; the webview validates them (display.js). */
+export type DisplayPrefs = {
+  columns?: unknown;
+  dateFormat?: unknown;
+  detailsLocation?: unknown;
+  highlightCurrentBranch?: unknown;
+};
+export type CommitGraphPrefs = { fileView: "list" | "tree"; openingRevs?: string[] | null; display?: DisplayPrefs };
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -52,6 +59,7 @@ const WEBVIEW_MODULES = [
   "branchTree.js",
   "refChips.js",
   "commitNav.js",
+  "display.js",
   "commitList.js",
   "layout.js",
   "main.js",
@@ -187,7 +195,7 @@ export function buildCommitGraphShellHtml(
             <span class="gv-pane-head__label gv-collapsible__title">${escapeHtml(ui.paneLogAria)}</span>
           </div>
           <div class="gv-unified-wrap gv-collapsible__body">
-            <div class="gv-unified-head" aria-hidden="true">
+            <div class="gv-unified-head" tabindex="0" role="button" aria-haspopup="menu" aria-label="${escapeHtml(ui.columnMenuHint)}" title="${escapeHtml(ui.columnMenuHint)}">
               <span class="gv-unified-head-graph">${escapeHtml(ui.columnGraph)}</span>
               <span class="gv-unified-head-commit">${escapeHtml(ui.columnCommit)}</span>
             </div>

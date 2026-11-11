@@ -305,3 +305,18 @@
   .gv-shell .gv-row-right { display: none; }
   .gv-shell .gv-ref-chips { max-width: 40%; }
 }
+
+/* Columns hidden in settings (gitline.graph.columns) or from the column header's menu. */
+.gv-shell.gv-hide-col-author .gv-row-right .gv-author,
+.gv-shell.gv-hide-col-date .gv-row-right .gv-time,
+.gv-shell.gv-hide-col-sha .gv-row-right .gv-hash {
+  display: none;
+}
+
+/*
+ * gitline.graph.highlightCurrentBranch: commits on the current branch get a light tint (as in
+ * JetBrains IDEs), in views that also show other branches. Selection and hover still win.
+ */
+.gv-shell.gv-highlight-head .gv-unified-row--onhead:not(.gv-unified-row--selected):not(:hover) {
+  background: color-mix(in srgb, var(--vscode-textLink-foreground, #3794ff) 9%, transparent);
+}

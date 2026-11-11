@@ -25,6 +25,7 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 - **SVG lane graph** — color-coded branches with smooth bezier merges.
 - **Ref labels** next to each commit: `HEAD`, tags, local and remote branches. A local branch and its remote at the same commit share one label (`main ⇄`); past two labels the rest fold into `+N` (hover for the list), so the message stays readable.
 - **Resizable, collapsible panes** — collapse the branch list, the graph or the preview from the chevron in its header; drag the dividers (or focus one and use ←/→, Enter to collapse, double-click to reset). Sizes are remembered. In a narrow graph pane, author, time and hash give way to the message.
+- **Your columns, your dates** — right-click the column header to show or hide author, date and SHA; pick relative (`3h ago`) or absolute (`2026-11-11 14:05`) dates. Optionally tint the current branch's commits (as in JetBrains IDEs) when other branches are shown too.
 - **Keyboard** — ↑/↓, Page Up/Down, Home/End move through commits; <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+↓/↑ follow the first parent / child; <kbd>Shift</kbd>+<kbd>F10</kbd> opens the commit menu; <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>F</kbd> searches.
 - **All branches** — one graph of every local and remote branch and tag. Commits that are not on your current branch (not reachable from `HEAD`) are dimmed, so unmerged work stands out. Clicking a single branch dims the same way; **HEAD (default log)** shows just the current branch.
 - **Pick several branches** — <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+click (or <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Enter</kbd>) branches in the sidebar to show just those, e.g. your teammates' branches. The header reads `repo · 3 branches`; hover it for the list. The filter box above the list narrows long branch lists (`origin/`, `chore`, …).
@@ -54,12 +55,17 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 
 ### Click a commit
 
-- Right pane shows the **changed files** with status badge (`A` / `M` / `D` / `R` / `C`) and `+N −M` line counts.
+- The details pane (to the right, or below the graph — `gitline.graph.detailsLocation`; `auto` puts it below in a narrow, tall panel) shows the **changed files** with status badge (`A` / `M` / `D` / `R` / `C`) and `+N −M` line counts.
 - Click a file → native VS Code diff editor, with rename-aware before/after paths.
 - "Patch" button opens the full `git show` as a tab.
 - **List / Tree toggle** — show the files as a folder tree. Single-child folders collapse into one row (`java/com/acme/shop/checkout`), each folder shows how many files changed under it, and folders open and close with click, Enter / Space or ← / →. The choice is remembered per workspace.
 
 ![Switching the changed files to a tree and collapsing a folder](docs/images/tree-view.gif)
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/details-bottom-light.png">
+  <img src="docs/images/details-bottom-dark.png" width="640" alt="The commit details below the graph in the All branches view: the current branch's commits tinted, other branches dimmed, absolute dates, and the changed files of the selected merge commit">
+</picture>
 
 ### Compare and rewrite
 
@@ -117,8 +123,12 @@ For per-file history: right-click any file → **Gitline: File History**, or use
 | `gitline.repositories.ignoredFolders` | `["node_modules"]` | Folder names never searched for repositories. |
 | `gitline.graph.defaultView` | `current` | What the graph opens with: `current` (the current branch), `all` (every branch and tag), or `selected` (the branches below). Applied when the panel is created — window start or reload; a view you pick in the sidebar stays until then. Leave it unset to reopen the last view you used. |
 | `gitline.graph.defaultBranches` | `[]` | For `selected`: branch, remote branch or tag names, and patterns where `*` matches within one path segment — `["main", "origin/team/*"]`. Names a repository doesn't have are skipped. |
+| `gitline.graph.columns` | all shown | Which columns show next to each commit: `{ "author": true, "date": true, "sha": true }`. Also from the column header's right-click menu. |
+| `gitline.graph.dateFormat` | `relative` | `relative` (`3h ago`) or `absolute` (`2026-11-11 14:05`, local time). Hover a date for the other one. |
+| `gitline.graph.detailsLocation` | `auto` | Where the commit details go: `right`, `bottom`, or `auto` (below the graph when the panel is narrow and tall). |
+| `gitline.graph.highlightCurrentBranch` | `false` | Tint the current branch's commits when the graph also shows other branches. |
 
-Both `gitline.graph.*` settings are window-scoped: set them in user or workspace settings (not per folder of a multi-root workspace).
+All `gitline.graph.*` settings are window-scoped: set them in user or workspace settings (not per folder of a multi-root workspace).
 
 ## How it compares
 

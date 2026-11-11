@@ -480,6 +480,7 @@
       if (!$("repo-menu").hidden) renderRepoMenu(false);
     },
     graphPayload: function (d) { renderPayload(d.payload); },
+    displayPrefs: function (d) { GV.display.set(d.display); },
     graphError: function (d) { renderGraphError(d.code, d.message); },
     commitFiles: function (d) { if (d.hash === S.currentHash) detailPane.renderFiles(d.files || [], "commit"); },
     stashFiles: function (d) { if (d.ref === S.currentHash) detailPane.renderFiles(d.files || [], "stash"); },
@@ -600,6 +601,40 @@
       searchInput.select();
     }
   });
+
+  // Right-click the graph's column header: show or hide author, date and hash (saved in settings).
+  var columnHead = document.querySelector(".gv-unified-head");
+  function openColumnMenu(x, y) {
+    var cols = GV.display.get().columns;
+    var labels = { author: UI.columnAuthor || "Author", date: UI.columnDate || "Date", sha: UI.columnSha || "SHA" };
+    GV.contextMenu.show(x, y, GV.displayMath.COLUMNS.map(function (key) {
+      return {
+        label: labels[key],
+        checked: cols[key],
+        run: function () {
+          var next = GV.displayMath.toggleColumn(cols, key);
+          GV.display.set(Object.assign({}, GV.display.get(), { columns: next })); // at once; settings echo it back
+          post("setColumns", { columns: next });
+        },
+      };
+    }));
+    var first = document.querySelector("#ctx-menu button");
+    if (first) first.focus();
+  }
+  if (columnHead) {
+    columnHead.addEventListener("contextmenu", function (ev) {
+      ev.preventDefault();
+      openColumnMenu(ev.clientX, ev.clientY);
+    });
+    // Keyboard: Enter, Space, Shift+F10 or the context-menu key open the same menu.
+    columnHead.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === " " || ev.key === "ContextMenu" || (ev.shiftKey && ev.key === "F10")) {
+        ev.preventDefault();
+        var r = columnHead.getBoundingClientRect();
+        openColumnMenu(r.left + 8, r.bottom);
+      }
+    });
+  }
 
   applyPathFilter();
   applyMergesUi();

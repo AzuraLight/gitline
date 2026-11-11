@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.7.0
+
+### Added
+
+- **Choose the graph's columns.** Right-click the graph's column header (or focus it and press
+  Enter / Shift+F10) to show or hide **author**, **date** and **SHA**; the choice is saved in
+  `gitline.graph.columns`. In a narrow pane they still give way to the message, as before.
+- **Absolute dates.** `gitline.graph.dateFormat`: `relative` (`3h ago`, default) or `absolute`
+  (`2026-11-11 14:05`, local time). Hover a date for the other form.
+- **Details below the graph.** `gitline.graph.detailsLocation`: `right`, `bottom` or `auto`
+  (default). Below the graph the details resize with an up/down splitter (drag, ↑/↓, double-click
+  to reset), collapse like before, and their height is remembered apart from the side-by-side
+  width.
+- **Tint the current branch.** `gitline.graph.highlightCurrentBranch` (off by default) gives the
+  commits of the current branch a light background when the graph also shows other branches —
+  e.g. in All branches, next to the dimming of everything else.
+- Changing any of these settings restyles the open panel at once, without reloading the graph.
+
+### Changed
+
+- With `detailsLocation` left at `auto`, a narrow but tall panel (under 640 px wide, graph area at
+  least 300 px high) now shows the commit details below the graph instead of folding them away.
+  Set it to `right` for the 1.6 behaviour.
+
 ## 1.6.0
 
 ### Added

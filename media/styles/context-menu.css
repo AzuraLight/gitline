@@ -52,3 +52,16 @@
   margin: 4px 6px;
   background: color-mix(in srgb, var(--vscode-menu-separatorBackground, var(--gv-line)) 70%, transparent);
 }
+
+/* Checkbox items (column menu): a fixed slot for the check mark keeps the labels aligned. */
+.gv-ctx__item--check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 8px;
+}
+
+.gv-ctx__check {
+  flex: 0 0 1em;
+  text-align: center;
+}

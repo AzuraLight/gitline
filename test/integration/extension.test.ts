@@ -94,6 +94,41 @@ describe("Gitline in VS Code", function () {
     assert.strictEqual(props["gitline.graph.defaultBranches"].scope, "window");
   });
 
+  it("declares the 1.7.0 display settings with window scope and passes their values on", async () => {
+    const pkg = vscode.extensions.getExtension(EXTENSION_ID)!.packageJSON;
+    const configs = [pkg.contributes.configuration].flat();
+    const props = Object.assign({}, ...configs.map((c: { properties: object }) => c.properties));
+    for (const k of ["columns", "dateFormat", "detailsLocation", "highlightCurrentBranch"]) {
+      assert.strictEqual(props[`gitline.graph.${k}`].scope, "window", k);
+    }
+    const api = vscode.extensions.getExtension<GitlineExports>(EXTENSION_ID)!.exports;
+    assert.deepStrictEqual(api.displayPrefs(), {
+      columns: { author: true, date: true, sha: true },
+      dateFormat: "relative",
+      detailsLocation: "auto",
+      highlightCurrentBranch: false,
+    });
+    const config = () => vscode.workspace.getConfiguration("gitline.graph");
+    const G = vscode.ConfigurationTarget.Global;
+    try {
+      await config().update("dateFormat", "absolute", G);
+      await config().update("detailsLocation", "bottom", G);
+      assert.strictEqual(api.displayPrefs().dateFormat, "absolute");
+      assert.strictEqual(api.displayPrefs().detailsLocation, "bottom");
+      // The column menu's write: a clean object, junk ignored, in user settings without a workspace value.
+      await api.writeColumns({ author: false, date: "x", bogus: 1 });
+      assert.deepStrictEqual(config().inspect("columns")?.globalValue, { author: false, date: true, sha: true });
+      await api.writeColumns(["nope"]);
+      await api.writeColumns(null);
+      assert.deepStrictEqual(config().inspect("columns")?.globalValue, { author: false, date: true, sha: true });
+      // Changes reach the open panel through the change listener; it must not throw.
+      await vscode.commands.executeCommand("gitline.openCommitGraph");
+      await config().update("highlightCurrentBranch", true, G);
+    } finally {
+      for (const k of ["columns", "dateFormat", "detailsLocation", "highlightCurrentBranch"]) await config().update(k, undefined, G);
+    }
+  });
+
   it("refusing to save leaves existing settings untouched, and settings changes do not throw", async () => {
     const config = () => vscode.workspace.getConfiguration("gitline.graph");
     const G = vscode.ConfigurationTarget.Global;

@@ -17,7 +17,10 @@ import {
   hasShownGraph,
   rememberRecent,
   type SyncOp,
+  readDisplayPrefs,
+  writeColumns,
 } from "./panelWebview";
+import type { DisplayPrefs } from "./commitGraphView";
 
 /** What `activate` returns. Not a public API — the integration tests read it. */
 export type GitlineExports = {
@@ -32,6 +35,10 @@ export type GitlineExports = {
   hasShownGraph(): boolean;
   /** What "Open Repository…" does after the folder dialog: put a repository on the recent list. */
   addRecentRepo(root: string): Promise<void>;
+  /** The display settings the webview receives (raw; the webview validates them). */
+  displayPrefs(): DisplayPrefs;
+  /** What the graph's column-header menu does: write `gitline.graph.columns`. */
+  writeColumns(columns: unknown): Promise<void>;
 };
 
 export function activate(context: vscode.ExtensionContext): GitlineExports {
@@ -106,6 +113,8 @@ export function activate(context: vscode.ExtensionContext): GitlineExports {
     selectRepo: (root: string) => setSelectedRepo(root),
     hasShownGraph: () => hasShownGraph(),
     addRecentRepo: (root: string) => rememberRecent(root),
+    displayPrefs: () => readDisplayPrefs(),
+    writeColumns: (columns: unknown) => writeColumns(columns),
   };
 }
 

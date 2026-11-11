@@ -7,6 +7,10 @@ export type CommitGraphWebviewUi = {
   toolbarAria: string;
   columnGraph: string;
   columnCommit: string;
+  columnAuthor: string;
+  columnDate: string;
+  columnSha: string;
+  columnMenuHint: string;
   detailHint: string;
   loading: string;
   errorGeneric: string;
@@ -90,6 +94,10 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     toolbarAria: vscode.l10n.t("Graph toolbar"),
     columnGraph: vscode.l10n.t("Graph"),
     columnCommit: vscode.l10n.t("Commit"),
+    columnAuthor: vscode.l10n.t("Author"),
+    columnDate: vscode.l10n.t("Date"),
+    columnSha: vscode.l10n.t("SHA"),
+    columnMenuHint: vscode.l10n.t("Right-click to show or hide columns"),
     detailHint: vscode.l10n.t("Click a commit to see the files it changed. Right-click for actions."),
     loading: vscode.l10n.t("Loading…"),
     errorGeneric: vscode.l10n.t("Error"),

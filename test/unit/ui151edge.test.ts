@@ -133,7 +133,7 @@ describe("commit list keyboard — edge cases", () => {
 });
 
 describe("pane layout values — junk", () => {
-  const DEF = { sidebarW: 220, previewW: 0, collapsed: { sidebar: false, log: false, preview: false } };
+  const DEF = { sidebarW: 220, previewW: 0, previewH: 0, collapsed: { sidebar: false, log: false, preview: false } };
 
   it("rejects strings, NaN, null, arrays and primitives", () => {
     for (const raw of [null, 0, "x", [], true, { sidebarW: "300", previewW: "400" }, { sidebarW: NaN, previewW: NaN },

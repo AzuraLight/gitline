@@ -2,7 +2,7 @@
   "name": "gitline",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "publisher": "AzuraLight",
   "author": {
     "name": "AzuraLight"
@@ -158,6 +158,70 @@
           "default": [],
           "scope": "window",
           "markdownDescription": "%config.graph.defaultBranches%"
+        },
+        "gitline.graph.columns": {
+          "type": "object",
+          "properties": {
+            "author": {
+              "type": "boolean",
+              "default": true,
+              "description": "%config.graph.columns.author%"
+            },
+            "date": {
+              "type": "boolean",
+              "default": true,
+              "description": "%config.graph.columns.date%"
+            },
+            "sha": {
+              "type": "boolean",
+              "default": true,
+              "description": "%config.graph.columns.sha%"
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "author": true,
+            "date": true,
+            "sha": true
+          },
+          "scope": "window",
+          "markdownDescription": "%config.graph.columns%"
+        },
+        "gitline.graph.dateFormat": {
+          "type": "string",
+          "enum": [
+            "relative",
+            "absolute"
+          ],
+          "enumDescriptions": [
+            "%config.graph.dateFormat.relative%",
+            "%config.graph.dateFormat.absolute%"
+          ],
+          "default": "relative",
+          "scope": "window",
+          "markdownDescription": "%config.graph.dateFormat%"
+        },
+        "gitline.graph.detailsLocation": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "right",
+            "bottom"
+          ],
+          "enumDescriptions": [
+            "%config.graph.detailsLocation.auto%",
+            "%config.graph.detailsLocation.right%",
+            "%config.graph.detailsLocation.bottom%"
+          ],
+          "default": "auto",
+          "scope": "window",
+          "markdownDescription": "%config.graph.detailsLocation%"
+        },
+        "gitline.graph.highlightCurrentBranch": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "markdownDescription": "%config.graph.highlightCurrentBranch%"
         }
       }
     },

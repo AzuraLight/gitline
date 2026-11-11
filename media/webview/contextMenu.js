@@ -1,4 +1,5 @@
-// Right-click menu. items: array of { label, run, danger? } or "-" for a separator.
+// Right-click menu. items: array of { label, run, danger?, checked? } or "-" for a separator.
+// An item with `checked` (true / false) is a checkbox item: a check mark shows when it is on.
 (function (GV) {
   "use strict";
   var ctxEl = document.getElementById("ctx-menu");
@@ -13,6 +14,12 @@
     if (it === "-") return GV.util.el("div", "gv-ctx__sep");
     var btn = GV.util.el("button", "gv-ctx__item" + (it.danger ? " gv-ctx__item--danger" : ""), it.label);
     btn.type = "button";
+    if (typeof it.checked === "boolean") {
+      btn.classList.add("gv-ctx__item--check");
+      btn.setAttribute("role", "menuitemcheckbox");
+      btn.setAttribute("aria-checked", it.checked ? "true" : "false");
+      btn.insertBefore(GV.util.el("span", "gv-ctx__check", it.checked ? "✓" : ""), btn.firstChild);
+    }
     btn.addEventListener("click", function (ev) {
       ev.stopPropagation();
       hide();

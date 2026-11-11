@@ -152,10 +152,10 @@ describe("keyboard movement in the commit list", () => {
 describe("pane layout values", () => {
   it("normalizes saved layouts, including junk and pre-1.5.1 state", () => {
     assert.deepStrictEqual(layoutMath.normalize(undefined), {
-      sidebarW: 220, previewW: 0, collapsed: { sidebar: false, log: false, preview: false },
+      sidebarW: 220, previewW: 0, previewH: 0, collapsed: { sidebar: false, log: false, preview: false },
     });
     const n = layoutMath.normalize({ sidebarW: 300.6, previewW: -5, collapsed: { log: true, preview: true, sidebar: "yes" } });
-    assert.deepStrictEqual(n, { sidebarW: 301, previewW: 0, collapsed: { sidebar: false, log: true, preview: false } });
+    assert.deepStrictEqual(n, { sidebarW: 301, previewW: 0, previewH: 0, collapsed: { sidebar: false, log: true, preview: false } });
   });
 
   it("never collapses the graph and the preview together", () => {

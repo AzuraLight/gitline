@@ -136,6 +136,8 @@
 
   var BRANCH_NAMES = ["main", "feature/search", "feature/checkout", "fix/cart-total", "origin/main", "origin/feature/search"];
 
+  var display = (window.__GV_DEMO_DISPLAY__) || {};
+
   function graphPayload(req) {
     // Same views as the extension: HEAD's own log, every branch (":all"), one branch, or several
     // names / `*` patterns (one path segment). Outside HEAD's log, commits HEAD cannot reach carry
@@ -191,6 +193,7 @@
       viewRefs: viewRefs,
       revMissing: revMissing,
       requestedRevs: revs,
+      onHeadKnown: !!revs.length && !revMissing,
       // As in the extension: a deleted single branch is dropped; a list that matches nothing is kept.
       dropSelection: !!revMissing && revs.length === 1 && revs[0].indexOf("*") < 0,
       revMissingIsList: !!revMissing && (revs.length > 1 || revs[0].indexOf("*") >= 0),
@@ -219,6 +222,11 @@
 
   var HANDLERS = {
     requestGraph: function (m) { reply({ type: "graphPayload", payload: graphPayload(m) }); },
+    // Like the settings round trip: the column menu writes gitline.graph.columns, the host echoes it.
+    setColumns: function (m) {
+      display = Object.assign({}, display, { columns: m.columns });
+      reply({ type: "displayPrefs", display: display });
+    },
     selectRepo: function (m) { selectedRepo = m.root; reply({ type: "reloadNow" }); },
     refreshRepos: function () { reply({ type: "repoList", items: repoItems(), selectedRepo: selectedRepo }); },
     clearRecentRepos: function () { recentRepos = []; reply({ type: "repoList", items: repoItems(), selectedRepo: selectedRepo }); },
