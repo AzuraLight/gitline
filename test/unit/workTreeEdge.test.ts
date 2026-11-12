@@ -257,7 +257,9 @@ describe("work tree edge: stage / unstage", withRepo(() => {
     f = await readWorkingFiles(repo.root);
     assert.strictEqual(f.staged.length, 0);
     assert.strictEqual(f.untracked.length, 2000);
-    assert.ok(Date.now() - t0 < 20_000, `took ${Date.now() - t0}ms`);
+    // Catches one git process per file (minutes), not runner speed: Windows runners took 11–20 s.
+    const limit = process.platform === "win32" ? 45_000 : 20_000; // under the suite's 60 s timeout
+    assert.ok(Date.now() - t0 < limit, `took ${Date.now() - t0}ms`);
   });
 
   it("a tracked file that matches .gitignore stages", async () => {
