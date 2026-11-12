@@ -13,6 +13,10 @@ export class TempRepo {
     this.git("config", "user.email", "test@example.com");
     this.git("config", "user.name", "Gitline Test");
     this.git("config", "commit.gpgsign", "false");
+    // Windows runners default to autocrlf=true and a 260-character path limit: tests compare
+    // bytes git writes back and use very long paths.
+    this.git("config", "core.autocrlf", "false");
+    this.git("config", "core.longpaths", "true");
   }
 
   git(...args: string[]): string {
