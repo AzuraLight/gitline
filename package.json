@@ -2,7 +2,7 @@
   "name": "gitline",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "publisher": "AzuraLight",
   "author": {
     "name": "AzuraLight"
@@ -222,6 +222,26 @@
           "default": false,
           "scope": "window",
           "markdownDescription": "%config.graph.highlightCurrentBranch%"
+        },
+        "gitline.graph.messageAlignment": {
+          "type": "string",
+          "enum": [
+            "lane",
+            "column"
+          ],
+          "enumDescriptions": [
+            "%config.graph.messageAlignment.lane%",
+            "%config.graph.messageAlignment.column%"
+          ],
+          "default": "lane",
+          "scope": "window",
+          "markdownDescription": "%config.graph.messageAlignment%"
+        },
+        "gitline.performance.suggestCommitGraph": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "%config.performance.suggestCommitGraph%"
         }
       }
     },

@@ -220,5 +220,11 @@
   "{0} (Working Tree)": "{0} (작업 트리)",
   "Undo the rename {0} → {1}? {0} comes back as in the last commit and {1} is deleted, with its changes. This cannot be undone.": "이름 변경 {0} → {1}을(를) 되돌릴까요? {0}은(는) 마지막 커밋 상태로 돌아오고, {1}은(는) 변경 내용과 함께 삭제됩니다. 되돌릴 수 없습니다.",
   "{0} is a new file that is in no commit. Delete it? Its content cannot be recovered.": "{0}은(는) 어떤 커밋에도 없는 새 파일입니다. 삭제할까요? 내용을 복구할 수 없습니다.",
-  "Nothing was stashed: the chosen changes are empty.": "stash한 것이 없습니다. 고른 변경이 비어 있습니다."
+  "Nothing was stashed: the chosen changes are empty.": "stash한 것이 없습니다. 고른 변경이 비어 있습니다.",
+  "Create Index": "색인 만들기",
+  "Don't Ask Again for This Repository": "이 저장소에서는 다시 묻지 않기",
+  "Gitline: Loading the history of {0} took {1}s. Git can build its commit-graph index to make it about 10 times faster. It only adds an index file; your history is not changed.": "Gitline: {0}의 이력을 불러오는 데 {1}초가 걸렸습니다. Git의 커밋 그래프 색인(commit-graph)을 만들면 약 10배 빨라집니다. 색인 파일만 추가되며 이력은 바뀌지 않습니다.",
+  "Gitline: Building the commit-graph index…": "Gitline: 커밋 그래프 색인을 만드는 중…",
+  "Gitline: Could not build the commit-graph index: {0}": "Gitline: 커밋 그래프 색인을 만들지 못했습니다: {0}",
+  "Gitline: Commit-graph index built.": "Gitline: 커밋 그래프 색인을 만들었습니다."
 }

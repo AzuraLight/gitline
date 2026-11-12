@@ -36,8 +36,8 @@
    * was waiting for this row's commit: those run from the row's top edge into its node (a fork
    * point has one per child branch, each in that branch's colour).
    */
-  function drawPassthroughs(svg, commits, layout, g, m) {
-    for (var i = 0; i < commits.length; i++) {
+  function drawPassthroughs(svg, commits, layout, g, m, from, to) {
+    for (var i = from; i <= to; i++) {
       var lp = layout.perRow[i];
       var cy = g.rowY(i);
       for (var L = 0; L < lp.before.length; L++) {
@@ -54,9 +54,9 @@
     }
   }
 
-  /** Each commit → its parents' lanes on the next row; a dashed tail when the parent is not loaded. */
-  function drawParentEdges(svg, commits, layout, commitIndex, g, m) {
-    for (var i = 0; i < commits.length; i++) {
+  /** Each commit → its parents' lanes on the next row, dashed when the parent is not loaded. */
+  function drawParentEdges(svg, commits, layout, commitIndex, g, m, from, to) {
+    for (var i = from; i <= to; i++) {
       var lp = layout.perRow[i];
       var cx = g.laneX(lp.lane);
       var cy = g.rowY(i);
@@ -67,8 +67,7 @@
         var px = g.laneX(pLane);
         var step = pathCurve(cx, cy, px, cy + m.rowH / 2);
         if (commitIndex[parents[pi]] == null) {
-          var endY = commits.length * m.rowH + m.rowH / 2;
-          addPath(svg, step + " M " + px + " " + (cy + m.rowH / 2) + " L " + px + " " + endY, laneColor(pLane), 0.6, true);
+          addPath(svg, step, laneColor(pLane), 0.6, true);
         } else {
           addPath(svg, step, laneColor(pLane), 0.95);
         }
@@ -76,8 +75,34 @@
     }
   }
 
-  function drawNodes(svg, commits, layout, g, m) {
-    for (var i = 0; i < commits.length; i++) {
+  /**
+   * The dashed run from a commit whose parent is not loaded down to the end of the list, drawn
+   * for rows from..to only. In a file's history nearly every commit has such a run (its parent
+   * changed other files): 4,478 of 4,959 rows for VS Code's package.json. Runs in one lane share
+   * its colour and line, so each lane gets one run, from the first that starts at or above `to`.
+   */
+  function drawTails(svg, commits, layout, commitIndex, g, m, from, to) {
+    var firstStart = {}; // lane → row of the earliest run in it
+    for (var i = 0; i <= to; i++) {
+      var parents = commits[i].parents || [];
+      for (var pi = 0; pi < parents.length; pi++) {
+        var pLane = layout.perRow[i].parentLanes[pi];
+        if (pLane == null || commitIndex[parents[pi]] != null) continue;
+        if (!(pLane in firstStart)) firstStart[pLane] = i;
+      }
+    }
+    var top = from * m.rowH;
+    var bottom = to === commits.length - 1 ? commits.length * m.rowH + m.rowH / 2 : (to + 1) * m.rowH;
+    for (var lane in firstStart) {
+      var startY = Math.max(g.rowY(firstStart[lane]) + m.rowH / 2, top);
+      if (startY >= bottom) continue;
+      var px = g.laneX(Number(lane));
+      addPath(svg, "M " + px + " " + startY + " L " + px + " " + bottom, laneColor(Number(lane)), 0.6, true);
+    }
+  }
+
+  function drawNodes(svg, commits, layout, g, m, from, to) {
+    for (var i = from; i <= to; i++) {
       var lane = layout.perRow[i].lane;
       var color = laneColor(lane);
       var cx = g.laneX(lane), cy = g.rowY(i);
@@ -92,12 +117,41 @@
     }
   }
 
-  /** m = { rowH, laneW, nodeR, sidePad } */
-  function draw(svg, commits, layout, commitIndex, m) {
+  function layer(svg, cls) {
+    var el = svg.querySelector("g." + cls);
+    if (!el) {
+      el = svgEl("g", { class: cls });
+      // Below the selection ring, which is appended to the svg itself.
+      svg.insertBefore(el, svg.querySelector(".gv-node-selected"));
+    }
+    return el;
+  }
+
+  /**
+   * Starts a fresh drawing. Rows are drawn by drawRows, only the ones near the viewport — with
+   * thousands of rows, drawing every one stalled the panel (1.10.0: 5,000 rows took 1.8 s to draw
+   * and lay out).
+   */
+  function draw(svg) {
+    svg.textContent = "";
+    layer(svg, "gv-graph-rows");
+  }
+
+  /** Draws rows from..to (inclusive), replacing the rows drawn before. m = { rowH, laneW, nodeR, sidePad } */
+  function drawRows(svg, commits, layout, commitIndex, m, from, to) {
+    var rows = layer(svg, "gv-graph-rows");
+    rows.textContent = "";
+    from = Math.max(0, from);
+    to = Math.min(commits.length - 1, to);
+    if (to < from) return;
     var g = geometry(m);
-    drawPassthroughs(svg, commits, layout, g, m);
-    drawParentEdges(svg, commits, layout, commitIndex, g, m);
-    drawNodes(svg, commits, layout, g, m);
+    // Built off-document, then attached once.
+    var frag = svgEl("g", {});
+    drawTails(frag, commits, layout, commitIndex, g, m, from, to);
+    drawPassthroughs(frag, commits, layout, g, m, from, to);
+    drawParentEdges(frag, commits, layout, commitIndex, g, m, from, to);
+    drawNodes(frag, commits, layout, g, m, from, to);
+    while (frag.firstChild) rows.appendChild(frag.firstChild);
   }
 
   function highlightNode(svg, lane, rowIdx, m) {
@@ -111,5 +165,5 @@
     }));
   }
 
-  GV.graphSvg = { draw: draw, highlightNode: highlightNode };
+  GV.graphSvg = { draw: draw, drawRows: drawRows, highlightNode: highlightNode };
 })(window.GV = window.GV || {});

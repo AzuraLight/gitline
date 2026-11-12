@@ -31,9 +31,9 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 - **Pick several branches** — <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+click (or <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Enter</kbd>) branches in the sidebar to show just those, e.g. your teammates' branches. The header reads `repo · 3 branches`; hover it for the list. The filter box above the list narrows long branch lists (`origin/`, `chore`, …).
 - **Default view** — open Gitline on the current branch, all branches, or a list of branches and patterns such as `origin/team/*` (see [Settings](#settings)). Set it up by picking branches and running **Gitline: Save Current View as Default**.
 - **Search bar** — text, `@author`, or a full / partial SHA (the matching commit is listed first). 280 ms debounce, server-side `git log --grep` / `--author`.
-- **File-level history** — open the graph filtered to a single file (`--follow` for renames). Editor title bar button + explorer context menu.
+- **File-level history** — open the graph filtered to a single file (`--follow` for renames), drawn as one line from change to change. Editor title bar button + explorer context menu.
 - **Auto-refresh** — `.git/HEAD`, `refs/**`, `index` watched. Commit, checkout, fetch, stage — graph reloads automatically.
-- **Virtual scrolling with paging** — only the visible rows are in the DOM, and older history loads in pages of 200 as you scroll (up to 5,000 commits per view).
+- **Virtual scrolling with paging** — only the visible rows are in the DOM, and older history loads in pages of 200 as you scroll (up to 50,000 commits per view). Pages after the first are read ahead once, so scrolling stays fast; the graph lines are drawn only around what is on screen.
 - **Any file name** — non-ASCII paths (한글, 中文, 日本語 …), spaces and renames are read from git's NUL-separated output, so file lists and diffs work for every name.
 
 ### Multi-repo and remote sync
@@ -150,6 +150,8 @@ For per-file history: right-click any file → **Gitline: File History**, or use
 | `gitline.graph.dateFormat` | `relative` | `relative` (`3h ago`) or `absolute` (`2026-11-11 14:05`, local time). Hover a date for the other one. |
 | `gitline.graph.detailsLocation` | `auto` | Where the commit details go: `right`, `bottom`, or `auto` (below the graph when the panel is narrow and tall). |
 | `gitline.graph.highlightCurrentBranch` | `false` | Tint the current branch's commits when the graph also shows other branches. |
+| `gitline.graph.messageAlignment` | `lane` | Where commit messages start: `lane` (right after the lanes of each row, close to its node — as in VS Code's own Source Control graph) or `column` (one column after the graph's widest point). |
+| `gitline.performance.suggestCommitGraph` | `true` | When a large repository's history loads slowly because it has no commit-graph file (common right after a clone), offer to build one. Gitline asks first; "Don't Ask Again" applies to that repository. |
 
 All `gitline.graph.*` settings are window-scoped: set them in user or workspace settings (not per folder of a multi-root workspace).
 

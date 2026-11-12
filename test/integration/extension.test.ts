@@ -98,7 +98,7 @@ describe("Gitline in VS Code", function () {
     const pkg = vscode.extensions.getExtension(EXTENSION_ID)!.packageJSON;
     const configs = [pkg.contributes.configuration].flat();
     const props = Object.assign({}, ...configs.map((c: { properties: object }) => c.properties));
-    for (const k of ["columns", "dateFormat", "detailsLocation", "highlightCurrentBranch"]) {
+    for (const k of ["columns", "dateFormat", "detailsLocation", "highlightCurrentBranch", "messageAlignment"]) {
       assert.strictEqual(props[`gitline.graph.${k}`].scope, "window", k);
     }
     const api = vscode.extensions.getExtension<GitlineExports>(EXTENSION_ID)!.exports;
@@ -107,6 +107,7 @@ describe("Gitline in VS Code", function () {
       dateFormat: "relative",
       detailsLocation: "auto",
       highlightCurrentBranch: false,
+      messageAlignment: "lane",
     });
     const config = () => vscode.workspace.getConfiguration("gitline.graph");
     const G = vscode.ConfigurationTarget.Global;
@@ -173,6 +174,79 @@ describe("Gitline in VS Code", function () {
       assert.ok(posts.some((m) => m.type === "workError"));
     } finally {
       try { repo.dispose(); } catch { /* Windows may still hold a handle */ }
+    }
+  });
+
+  it("1.10.0 commit-graph suggestion: the real notification flow — create, cancel, don't ask again, setting off", async () => {
+    const api = vscode.extensions.getExtension<GitlineExports>(EXTENSION_ID)!.exports;
+    const win = vscode.window as unknown as Record<string, unknown>;
+    const realInfo = win.showInformationMessage;
+    const realProgress = win.withProgress;
+    const asked: string[] = [];
+    let answer: (buttons: string[]) => string | undefined = () => undefined;
+    win.showInformationMessage = async (message: string, ...buttons: string[]) => {
+      asked.push(message);
+      return answer(buttons);
+    };
+    const repos: TempRepo[] = [];
+    const fresh = () => {
+      const r = new TempRepo();
+      r.git("config", "gc.auto", "0");
+      r.commitEmpty("base");
+      repos.push(r);
+      return r;
+    };
+    const graphFile = (r: TempRepo) => fs.existsSync(path.join(r.root, ".git", "objects", "info", "commit-graph"));
+    try {
+      // Slow load, no index: asked with both buttons; "Create Index" runs the real progress notification.
+      const a = fresh();
+      answer = (b) => b[0];
+      await api.suggestCommitGraph(a.root, 1500);
+      assert.strictEqual(asked.length, 1);
+      assert.match(asked[0], /1\.5s/);
+      assert.ok(graphFile(a), "index written");
+      // Asked once per session for a repository.
+      await api.suggestCommitGraph(a.root, 1500);
+      assert.strictEqual(asked.length, 1);
+
+      // Fast load: not asked.
+      const b = fresh();
+      await api.suggestCommitGraph(b.root, 100);
+      assert.strictEqual(asked.length, 1);
+
+      // Cancel in the progress notification: nothing written, no error.
+      const c = fresh();
+      win.withProgress = async (_o: unknown, task: (p: unknown, t: vscode.CancellationToken) => Promise<unknown>) => {
+        const source = new vscode.CancellationTokenSource();
+        source.cancel();
+        return task({ report: () => undefined }, source.token);
+      };
+      await api.suggestCommitGraph(c.root, 1500);
+      win.withProgress = realProgress;
+      assert.strictEqual(asked.length, 2);
+      assert.ok(!graphFile(c), "cancelled: no index");
+
+      // "Don't ask again" is remembered for that repository only (it is a new session for it: dismissed wins).
+      const d = fresh();
+      answer = (btns) => btns[1];
+      await api.suggestCommitGraph(d.root, 1500);
+      assert.strictEqual(asked.length, 3);
+      assert.ok(!graphFile(d));
+
+      // The setting turns it off everywhere.
+      const e = fresh();
+      const perf = vscode.workspace.getConfiguration("gitline.performance");
+      await perf.update("suggestCommitGraph", false, vscode.ConfigurationTarget.Global);
+      try {
+        await api.suggestCommitGraph(e.root, 1500);
+        assert.strictEqual(asked.length, 3);
+      } finally {
+        await perf.update("suggestCommitGraph", undefined, vscode.ConfigurationTarget.Global);
+      }
+    } finally {
+      win.showInformationMessage = realInfo;
+      win.withProgress = realProgress;
+      for (const r of repos) try { r.dispose(); } catch { /* Windows may still hold a handle */ }
     }
   });
 

@@ -9,6 +9,7 @@ export type DisplayPrefs = {
   dateFormat?: unknown;
   detailsLocation?: unknown;
   highlightCurrentBranch?: unknown;
+  messageAlignment?: unknown;
 };
 export type CommitGraphPrefs = { fileView: "list" | "tree"; openingRevs?: string[] | null; display?: DisplayPrefs };
 

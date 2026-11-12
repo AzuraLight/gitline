@@ -19,6 +19,7 @@ import {
   type SyncOp,
   readDisplayPrefs,
   writeColumns,
+  maybeSuggestCommitGraph,
 } from "./panelWebview";
 import type { DisplayPrefs } from "./commitGraphView";
 import { handleWorkMessage } from "./workTreePanel";
@@ -42,6 +43,8 @@ export type GitlineExports = {
   writeColumns(columns: unknown): Promise<void>;
   /** What the working-changes pane's message does in `root`; confirmations answer `yes`. Returns what was posted back. */
   workMessage(root: string, msg: Record<string, unknown>, yes: boolean): Promise<Array<Record<string, unknown>>>;
+  /** What a first graph load of `loadMs` in `root` does about the commit-graph file. Returns what was posted back. */
+  suggestCommitGraph(root: string, loadMs: number): Promise<Array<Record<string, unknown>>>;
 };
 
 export function activate(context: vscode.ExtensionContext): GitlineExports {
@@ -121,6 +124,11 @@ export function activate(context: vscode.ExtensionContext): GitlineExports {
     workMessage: async (root: string, msg: Record<string, unknown>, yes: boolean) => {
       const posted: Array<Record<string, unknown>> = [];
       await handleWorkMessage(root, msg, (m) => void posted.push(m as Record<string, unknown>), async () => yes);
+      return posted;
+    },
+    suggestCommitGraph: async (root: string, loadMs: number) => {
+      const posted: Array<Record<string, unknown>> = [];
+      await maybeSuggestCommitGraph({ postMessage: async (m: unknown) => { posted.push(m as Record<string, unknown>); return true; } }, root, loadMs);
       return posted;
     },
   };

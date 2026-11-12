@@ -1,5 +1,5 @@
 // Display settings from `gitline.graph.*`: which right-hand columns show, relative or absolute
-// dates, where the commit details sit, and the current-branch row tint. They only change how rows
+// dates, where the commit details sit, the current-branch row tint and where messages start. They only change how rows
 // look, so applying them never asks git again. Pure parts live in GV.displayMath for the tests.
 (function (GV) {
   "use strict";
@@ -10,6 +10,7 @@
     dateFormat: "relative",
     detailsLocation: "auto",
     highlightCurrentBranch: false,
+    messageAlignment: "lane",
   };
 
   /** Settings from an untrusted source (settings.json hand edits) → a valid set. */
@@ -23,6 +24,8 @@
       dateFormat: r.dateFormat === "absolute" ? "absolute" : "relative",
       detailsLocation: r.detailsLocation === "right" || r.detailsLocation === "bottom" ? r.detailsLocation : "auto",
       highlightCurrentBranch: r.highlightCurrentBranch === true,
+      // "lane": each message right after its own row's lanes (#5); "column": all after the widest point.
+      messageAlignment: r.messageAlignment === "column" ? "column" : "lane",
     };
   }
 

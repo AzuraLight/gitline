@@ -10,6 +10,7 @@ type Prefs = {
   dateFormat: string;
   detailsLocation: string;
   highlightCurrentBranch: boolean;
+  messageAlignment: string;
 };
 const display = require(media("display.js")) as {
   COLUMNS: string[];
@@ -42,6 +43,15 @@ describe("display settings (1.7.0)", () => {
     assert.strictEqual(props["gitline.graph.highlightCurrentBranch"].default, display.DEFAULTS.highlightCurrentBranch);
     assert.deepStrictEqual(props["gitline.graph.dateFormat"].enum, ["relative", "absolute"]);
     assert.deepStrictEqual(props["gitline.graph.detailsLocation"].enum, ["auto", "right", "bottom"]);
+    assert.strictEqual(props["gitline.graph.messageAlignment"].default, display.DEFAULTS.messageAlignment);
+    assert.deepStrictEqual(props["gitline.graph.messageAlignment"].enum, ["lane", "column"]);
+  });
+
+  it("1.10.0 (#5): message alignment is 'lane' unless exactly 'column'", () => {
+    assert.strictEqual(display.normalize({ messageAlignment: "column" }).messageAlignment, "column");
+    for (const v of ["COLUMN", "left", 1, null, undefined]) {
+      assert.strictEqual(display.normalize({ messageAlignment: v }).messageAlignment, "lane", String(v));
+    }
   });
 
   it("hand-edited junk falls back per value; only an explicit false hides a column", () => {

@@ -33,5 +33,9 @@
   "config.graph.detailsLocation.auto": "Below the graph when the panel is narrow (under 640 px) and tall enough, otherwise to the right.",
   "config.graph.detailsLocation.right": "Always to the right of the graph.",
   "config.graph.detailsLocation.bottom": "Always below the graph.",
-  "config.graph.highlightCurrentBranch": "Tint the commits of the current branch (reachable from `HEAD`) when the graph also shows other branches, e.g. in the All branches view."
+  "config.graph.highlightCurrentBranch": "Tint the commits of the current branch (reachable from `HEAD`) when the graph also shows other branches, e.g. in the All branches view.",
+  "config.performance.suggestCommitGraph": "When the history of a large repository loads slowly because it has no commit-graph file, offer to build one (`git commit-graph write --reachable`). Gitline never builds it without asking.",
+  "config.graph.messageAlignment": "Where each commit's message starts.",
+  "config.graph.messageAlignment.lane": "Right after the lanes of its own row, close to its node.",
+  "config.graph.messageAlignment.column": "In one column, after the widest point of the graph."
 }

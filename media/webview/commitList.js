@@ -59,15 +59,38 @@
       return parts.join("  ·  ");
     }
 
-    function sizeRow(row, graphWidth) {
+    function sizeRow(row, textLeft) {
       row.style.height = METRICS.rowH + "px";
       row.style.minHeight = METRICS.rowH + "px";
-      row.style.paddingLeft = graphWidth + "px";
+      row.style.paddingLeft = textLeft + "px";
+    }
+
+    /** Text starts after the graph's widest point ("column") or after this row's own lanes ("lane"). */
+    function laneAligned() { return GV.display.get().messageAlignment !== "column"; }
+
+    /**
+     * Where row i's text starts in "lane" alignment (#5): just right of every line that crosses the
+     * row — lanes coming in from above, going out below, its node and the bends to its parents —
+     * so the text never covers a line. Never past the graph's own width.
+     */
+    function rowTextLeft(layout, i, graphWidth) {
+      if (!laneAligned()) return graphWidth;
+      var r = layout.perRow[i];
+      var lanes = Math.max(1, r.before.length, r.after.length, r.lane + 1);
+      for (var p = 0; p < r.parentLanes.length; p++) if (r.parentLanes[p] != null) lanes = Math.max(lanes, r.parentLanes[p] + 1);
+      return Math.min(graphWidth, METRICS.sidePad * 2 + lanes * METRICS.laneW);
+    }
+
+    /** Working changes / stash rows: on the first lane in "lane" alignment, centred in the graph otherwise. */
+    function virtualLeft(graphWidth) {
+      return laneAligned() ? Math.min(graphWidth, METRICS.sidePad * 2 + METRICS.laneW) : graphWidth;
     }
 
     function virtualRow(kind, title, sub, graphWidth, onClick) {
       var row = u.el("div", "gv-virtual-row gv-virtual-row--" + kind);
-      sizeRow(row, graphWidth);
+      var left = virtualLeft(graphWidth);
+      sizeRow(row, left);
+      row.style.setProperty("--gv-graph-w", left + "px"); // the dot sits in the middle of this
       row.appendChild(u.el("span", "gv-virtual-dot"));
       var body = u.el("div", "gv-virtual-body");
       body.appendChild(u.el("span", "gv-virtual-title", title));
@@ -169,9 +192,16 @@
       return cell;
     }
 
+    var graphRows = null; // what the svg is drawn from, and which rows it holds now
+    var GRAPH_MARGIN = 150; // rows drawn beyond the visible ones on each side
+
+    var resizeObserver = null;
+
     function clearScrollHandler() {
       if (scrollHandler && canvas) canvas.removeEventListener("scroll", scrollHandler);
       scrollHandler = null;
+      if (resizeObserver) resizeObserver.disconnect();
+      resizeObserver = null;
     }
 
     function drawGraph(commits, layout, graphWidth, graphOffset) {
@@ -182,10 +212,44 @@
       svg.style.width = graphWidth + "px";
       svg.style.height = h + "px";
       svg.style.top = graphOffset + "px";
-      svg.textContent = "";
       var commitIndex = {};
       commits.forEach(function (c, i) { commitIndex[c.hash] = i; });
       GV.graphSvg.draw(svg, commits, layout, commitIndex, METRICS);
+      graphRows = { commits: commits, layout: layout, index: commitIndex, from: -1, to: -1 };
+    }
+
+    /**
+     * Draws the graph for rows from..to plus a margin, unless they are already drawn: the svg holds
+     * a window of rows, redrawn when scrolling leaves it, not the whole list.
+     */
+    function ensureGraphRows(from, to) {
+      var gr = graphRows;
+      if (!svg || !gr) return;
+      if (from >= gr.from && to <= gr.to) return;
+      gr.from = Math.max(0, from - GRAPH_MARGIN);
+      gr.to = Math.min(gr.commits.length - 1, to + GRAPH_MARGIN);
+      GV.graphSvg.drawRows(svg, gr.commits, gr.layout, gr.index, METRICS, gr.from, gr.to);
+    }
+
+    var lastPayload = null;
+
+    /** Each commit's parent is the next row; the last keeps its first real parent (more to load). */
+    function linearHistory(commits) {
+      return commits.map(function (c, i) {
+        var next = commits[i + 1];
+        var parents = next ? [next.hash] : (c.parents && c.parents.length ? [c.parents[0]] : []);
+        return Object.assign({}, c, { parents: parents });
+      });
+    }
+
+    // Switching the text alignment only moves the text: lay the same rows out again.
+    if (GV.display.onChange) {
+      var alignment = GV.display.get().messageAlignment;
+      GV.display.onChange(function (d) {
+        if (d.messageAlignment === alignment) return;
+        alignment = d.messageAlignment;
+        if (lastPayload && activeList) render(lastPayload);
+      });
     }
 
     /** Renders commits; returns false when there is nothing to show. */
@@ -202,19 +266,27 @@
         if (!(w.staged || w.modified || w.untracked || w.conflicted)) return false;
         renderVirtualRows(payload, METRICS.sidePad * 2 + METRICS.laneW);
         if (svg) svg.textContent = "";
+        graphRows = null;
         return true;
       }
 
-      var layout = GV.laneLayout.computeLaneLayout(commits);
+      lastPayload = payload;
+      // A file's history lists only the commits that changed it; their real parents (which did
+      // not) are not in the list, so every row opened a lane that never closed — a wall of lines and
+      // no nodes. git cannot rewrite parents under --follow, so the graph links each commit to the
+      // next one listed: one straight line, as other file-history views show it.
+      var drawn = payload.pathFilter ? linearHistory(commits) : commits;
+      var layout = GV.laneLayout.computeLaneLayout(drawn);
       var graphWidth = Math.min(METRICS.sidePad * 2 + Math.max(1, layout.totalLanes) * METRICS.laneW, MAX_GRAPH_W);
       var graphOffset = renderVirtualRows(payload, graphWidth) * METRICS.rowH;
-      drawGraph(commits, layout, graphWidth, graphOffset);
+      drawGraph(drawn, layout, graphWidth, graphOffset);
       if (canvas) canvas.style.setProperty("--gv-graph-w", graphWidth + "px");
-      mountVirtualList(commits, layout, graphWidth, graphOffset, !!payload.onHeadKnown);
+      mountVirtualList(commits, drawn, layout, graphWidth, graphOffset, !!payload.onHeadKnown);
       return true;
     }
 
-    function mountVirtualList(commits, layout, graphWidth, graphOffset, onHeadKnown) {
+    /** drawn: the commits as the graph links them (in a file's history, each to the next row). */
+    function mountVirtualList(commits, drawn, layout, graphWidth, graphOffset, onHeadKnown) {
       var ROW_H = METRICS.rowH;
       var list = u.el("div", "gv-commit-list-inner");
       var topSpacer = u.el("div", "gv-spacer");
@@ -260,8 +332,9 @@
         selectedIndex: selectedIndex,
         count: commits.length,
         pageRows: function () { return Math.max(1, Math.floor(canvas.clientHeight / ROW_H) - 1); },
-        parentIndex: function (i) { return GV.commitNav.parentIndex(commits, i, indexOfHash); },
-        childIndex: function (i) { return GV.commitNav.childIndex(commits, i); },
+        // Parent / child keys follow the lines on screen.
+        parentIndex: function (i) { return GV.commitNav.parentIndex(drawn, i, indexOfHash); },
+        childIndex: function (i) { return GV.commitNav.childIndex(drawn, i); },
         rowEl: function (i) { return rendered[i]; },
         commit: function (i) { return commits[i]; },
       };
@@ -273,7 +346,7 @@
         row.setAttribute("role", "option");
         row.id = "gv-commit-row-" + i;
         row.dataset.hash = c.hash;
-        sizeRow(row, graphWidth);
+        sizeRow(row, rowTextLeft(layout, i, graphWidth));
         var isSel = c.hash === S.currentHash;
         row.setAttribute("aria-selected", isSel ? "true" : "false");
         if (isSel) {
@@ -305,7 +378,10 @@
 
       function visibleRange() {
         var scrollTop = canvas.scrollTop;
-        var viewH = canvas.clientHeight || commits.length * ROW_H;
+        // No height (a hidden panel, not laid out yet): a screenful, not the whole list — with
+        // 50,000 rows that built every row and drew every node. The resize observer below fills
+        // in the rest once the panel has a size.
+        var viewH = canvas.clientHeight || Math.min(commits.length, 40) * ROW_H;
         var start = Math.max(0, Math.floor((scrollTop - graphOffset) / ROW_H) - BUFFER);
         var end = Math.min(commits.length - 1, Math.ceil((scrollTop + viewH - graphOffset) / ROW_H) + BUFFER);
         if (end < start) { start = 0; end = Math.min(commits.length - 1, BUFFER * 2); }
@@ -336,6 +412,7 @@
         if (!canvas) return;
         var r = visibleRange();
         syncRows(r);
+        ensureGraphRows(r.start, r.end);
         if (r.end >= commits.length - 1 - BUFFER) app.loadMore();
       }
 
@@ -349,7 +426,16 @@
         });
       };
       if (canvas) canvas.addEventListener("scroll", scrollHandler, { passive: true });
+      // A panel shown again, or made taller, fires no scroll: bring the rows and graph up to date.
+      if (canvas && typeof ResizeObserver !== "undefined") {
+        resizeObserver = new ResizeObserver(function () { scrollHandler(); });
+        resizeObserver.observe(canvas);
+      }
       update();
+      // Drawing cleared the svg: put the selected commit's ring back (any re-render, e.g. a change
+      // of message alignment, not just the one main.js follows with reopening the commit).
+      var sel = selectedIndex();
+      if (sel >= 0) GV.graphSvg.highlightNode(svg, layout.perRow[sel].lane, sel, METRICS);
     }
 
     function clear() {

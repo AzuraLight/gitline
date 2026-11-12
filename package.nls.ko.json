@@ -33,5 +33,9 @@
   "config.graph.detailsLocation.auto": "패널이 좁고(640px 미만) 높이가 충분하면 그래프 아래, 그 밖에는 오른쪽.",
   "config.graph.detailsLocation.right": "항상 그래프 오른쪽.",
   "config.graph.detailsLocation.bottom": "항상 그래프 아래.",
-  "config.graph.highlightCurrentBranch": "그래프가 다른 브랜치도 함께 보여 줄 때(예: 모든 브랜치 보기) 현재 브랜치의 커밋(`HEAD`에서 닿는 커밋)에 옅은 배경색을 칠합니다."
+  "config.graph.highlightCurrentBranch": "그래프가 다른 브랜치도 함께 보여 줄 때(예: 모든 브랜치 보기) 현재 브랜치의 커밋(`HEAD`에서 닿는 커밋)에 옅은 배경색을 칠합니다.",
+  "config.performance.suggestCommitGraph": "큰 저장소에 커밋 그래프 색인(commit-graph)이 없어 이력을 늦게 불러오면, 색인을 만들지 물어봅니다(`git commit-graph write --reachable`). 묻지 않고 만들지는 않습니다.",
+  "config.graph.messageAlignment": "각 커밋의 메시지가 시작하는 위치입니다.",
+  "config.graph.messageAlignment.lane": "그 행의 차선 바로 뒤, 커밋 점 가까이에서 시작합니다.",
+  "config.graph.messageAlignment.column": "그래프의 가장 넓은 지점 뒤에서 한 열로 맞춰 시작합니다."
 }

@@ -65,10 +65,24 @@
     vscode.postMessage(m);
   }
 
+  // Request numbers restart when the webview reloads; replies to the previous page load carry the
+  // old session and are dropped too.
+  var SESSION = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  /** Same as the host's MAX_GRAPH_COMMITS: past it there is nothing more to ask for. */
+  var MAX_COMMITS = 50000;
+
+  /** A reply to anything but this page load's latest request. */
+  function isStale(d) {
+    if (!d) return false;
+    if (typeof d.session === "string" && d.session !== SESSION) return true;
+    return typeof d.requestId === "number" && d.requestId < (S.graphRequestId || 0);
+  }
+
   // keepLimit: true for auto-refresh and paging (keep what is loaded); a new search/filter starts from PAGE again.
   function requestGraph(keepLimit) {
     if (!keepLimit) S.limit = PAGE;
-    var msg = { limit: S.limit };
+    S.graphRequestId = (S.graphRequestId || 0) + 1;
+    var msg = { limit: S.limit, requestId: S.graphRequestId, session: SESSION };
     if (S.selectedRevs.length) msg.revs = S.selectedRevs.slice();
     if (S.pathFilter) msg.pathFilter = S.pathFilter;
     if (S.query) msg.query = S.query;
@@ -79,7 +93,7 @@
   function loadMore() {
     if (!S.hasMore || S.loadingMore) return;
     S.loadingMore = true;
-    S.limit += PAGE;
+    S.limit = GV.util.nextLimit(S.limit, PAGE);
     requestGraph(true);
   }
 
@@ -457,7 +471,8 @@
     renderSync(payload.sync);
 
     var commits = payload.commits || [];
-    S.hasMore = commits.length >= S.limit;
+    S.hasMore = commits.length >= S.limit && S.limit < MAX_COMMITS;
+    S.lastGoodLimit = S.limit;
     S.loadingMore = false;
     // The working-changes pane stays through a reload (each stage / commit reloads the graph):
     // re-rendering it would drop the caret from the message box. Not across repositories, though.
@@ -570,9 +585,19 @@
       if (typeof d.selectedRepo === "string" && d.selectedRepo) S.selectedRepo = d.selectedRepo;
       if (!$("repo-menu").hidden) renderRepoMenu(false);
     },
-    graphPayload: function (d) { renderPayload(d.payload); },
+    graphPayload: function (d) {
+      // An answer to an older request (it took longer than a newer one): the newer one wins.
+      if (isStale(d.payload)) return;
+      renderPayload(d.payload);
+    },
     displayPrefs: function (d) { GV.display.set(d.display); },
-    graphError: function (d) { renderGraphError(d.code, d.message); },
+    graphError: function (d) {
+      if (isStale(d)) return;
+      // Back to the last size that loaded, so the next refresh does not repeat a failing request.
+      S.loadingMore = false;
+      if (S.lastGoodLimit) S.limit = S.lastGoodLimit;
+      renderGraphError(d.code, d.message);
+    },
     commitFiles: function (d) { if (d.hash === S.currentHash) detailPane.renderFiles(d.files || [], "commit"); },
     stashFiles: function (d) { if (d.ref === S.currentHash) detailPane.renderFiles(d.files || [], "stash"); },
     compareFiles: function (d) {

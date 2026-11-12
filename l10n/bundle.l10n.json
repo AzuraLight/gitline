@@ -220,5 +220,11 @@
   "{0} (Working Tree)": "{0} (Working Tree)",
   "Undo the rename {0} → {1}? {0} comes back as in the last commit and {1} is deleted, with its changes. This cannot be undone.": "Undo the rename {0} → {1}? {0} comes back as in the last commit and {1} is deleted, with its changes. This cannot be undone.",
   "{0} is a new file that is in no commit. Delete it? Its content cannot be recovered.": "{0} is a new file that is in no commit. Delete it? Its content cannot be recovered.",
-  "Nothing was stashed: the chosen changes are empty.": "Nothing was stashed: the chosen changes are empty."
+  "Nothing was stashed: the chosen changes are empty.": "Nothing was stashed: the chosen changes are empty.",
+  "Create Index": "Create Index",
+  "Don't Ask Again for This Repository": "Don't Ask Again for This Repository",
+  "Gitline: Loading the history of {0} took {1}s. Git can build its commit-graph index to make it about 10 times faster. It only adds an index file; your history is not changed.": "Gitline: Loading the history of {0} took {1}s. Git can build its commit-graph index to make it about 10 times faster. It only adds an index file; your history is not changed.",
+  "Gitline: Building the commit-graph index…": "Gitline: Building the commit-graph index…",
+  "Gitline: Could not build the commit-graph index: {0}": "Gitline: Could not build the commit-graph index: {0}",
+  "Gitline: Commit-graph index built.": "Gitline: Commit-graph index built."
 }

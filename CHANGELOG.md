@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.10.0
+
+A release about the graph itself: large repositories stay fast, and messages sit next to their
+commits.
+
+### Added
+
+- **Messages next to their lanes** ([#5](https://github.com/AzuraLight/gitline/issues/5)). A
+  commit's message now starts right after the lanes that cross its row, close to its node, as in
+  VS Code's own Source Control graph — instead of after the widest point of the whole graph. Text
+  never covers a line. `gitline.graph.messageAlignment: "column"` keeps the previous single column.
+- **Offer to build Git's commit-graph index.** Right after a clone, Git has no commit-graph file and
+  every history load reads all commits (1.2 s per page in a 200,000-commit repository instead of
+  0.13 s). When the first load is slow and the file is missing, Gitline asks once whether to build
+  it (`git commit-graph write --reachable`: about 2 s there, cancellable, history untouched).
+  "Don't Ask Again" applies to that repository; `gitline.performance.suggestCommitGraph` turns it
+  off everywhere. Like Visual Studio, Gitline never builds it without asking.
+
+### Changed
+
+- **Up to 50,000 commits per view** (was 5,000).
+- **Scrolling a long history is fast.** Older pages used to re-read the whole history each time —
+  30 s in total to scroll 5,000 commits of the VS Code repository without the index; now 3 s, and
+  past the first pages each one takes about 25 ms. Pages after the first are read ahead in steps and
+  reused until a branch, tag or HEAD moves.
+- **Drawing is fast at any length.** The graph lines are drawn only around what is on screen:
+  5,000 commits took 1.8 s to draw, now 0.1 s; 50,000 take 0.07 s.
+- Commits that are not on the current branch are dimmed up to 100,000 of them (was 20,000 — the
+  VS Code repository alone has 27,000, so its oldest were left undimmed and the current-branch tint
+  switched off).
+
+### Fixed
+
+- **File history** showed a wall of vertical lines and no commit dots for files with many changes:
+  each commit opened a lane for a parent that is not in the list. A file's history is now drawn as
+  one line from change to change (renames are still followed), and the parent / child keys follow it.
+- A slow reply could replace a newer one — e.g. scroll, then search, and the unfiltered page landing
+  last replaced the results. Replies (and errors) to anything but the latest request are dropped.
+- A panel that was hidden while the graph loaded no longer builds every row at once.
+
 ## 1.9.0
 
 ### Added

@@ -98,7 +98,21 @@
     list.appendChild(el("li", "gv-detail-files-empty", message));
   }
 
+  /**
+   * How many commits to ask for when the list scrolls to its end. Pages of `page` at first; past
+   * 1,000 the steps follow the host's read-ahead (5,000 / 10,000 / 20,000 / 50,000), because every
+   * page re-sends and re-draws the whole list — 250 trips of 200 to reach 50,000 cost ~50 s of
+   * main-thread work (1.10.0 review). Each step is one read on the host.
+   */
+  var LIMIT_STEPS = [5000, 10000, 20000, 50000];
+  function nextLimit(limit, page) {
+    if (limit < 1000) return limit + page;
+    for (var i = 0; i < LIMIT_STEPS.length; i++) if (LIMIT_STEPS[i] > limit) return LIMIT_STEPS[i];
+    return limit + page;
+  }
+
   GV.util = {
+    nextLimit: nextLimit,
     laneColor: laneColor,
     esc: esc,
     formatTime: formatTime,

@@ -20,7 +20,7 @@ const execFileAsync = promisify(execFile);
 const NETWORK_TIMEOUT_MS = 120_000;
 
 /** input: written to git's stdin (e.g. revisions for `--stdin`, which has no command-line length limit). */
-type ExecOptions = { maxBuffer?: number; timeoutMs?: number; input?: string; env?: Record<string, string> };
+type ExecOptions = { maxBuffer?: number; timeoutMs?: number; input?: string; env?: Record<string, string>; signal?: AbortSignal };
 
 /**
  * Every git invocation goes through here, with explicit argv (no shell).
@@ -36,6 +36,7 @@ async function execGit(cwd: string, args: string[], options: ExecOptions = {}): 
       timeout: options.timeoutMs ?? 0,
       encoding: "utf8",
       env: { ...process.env, GIT_TERMINAL_PROMPT: "0", ...options.env },
+      signal: options.signal,
     });
     // Always close stdin: a command that does not read it must not wait on an open pipe. If git
     // exits before reading a large input the write fails with EPIPE; the exit status already
@@ -116,6 +117,11 @@ export async function runGitWithInput(cwd: string, args: string[], input: string
   return execGit(cwd, args, { input, timeoutMs });
 }
 
+/** Runs git, stopped when `signal` aborts (the promise then rejects). */
+export async function runGitAbortable(cwd: string, args: string[], signal: AbortSignal): Promise<string> {
+  return execGit(cwd, args, { signal });
+}
+
 /** Runs `git` in the C locale, for output that is parsed by its English wording. */
 export async function runGitC(cwd: string, args: string[]): Promise<string> {
   return execGit(cwd, args, { env: { LC_ALL: "C", LANG: "C", LANGUAGE: "C" } });
@@ -151,9 +157,9 @@ async function isShallow(cwd: string): Promise<boolean> {
 }
 
 /** Runs `git` and resolves to null instead of throwing — for probes where failure is an answer. */
-async function tryGit(cwd: string, args: string[], input?: string): Promise<string | null> {
+async function tryGit(cwd: string, args: string[], input?: string, maxBuffer = 4 * 1024 * 1024): Promise<string | null> {
   try {
-    return await execGit(cwd, args, { maxBuffer: 4 * 1024 * 1024, input });
+    return await execGit(cwd, args, { maxBuffer, input });
   } catch {
     return null;
   }
@@ -413,6 +419,32 @@ export async function resolveRefSelection(cwd: string, wanted: string[]): Promis
 }
 
 /**
+ * A shallow clone or grafts: deepening it (fetch --unshallow / --deepen) or editing the grafts file
+ * changes the history without moving any ref, so answers keyed by the refs cannot be kept.
+ */
+async function historyCanChangeUnderRefs(cwd: string): Promise<boolean> {
+  if (await isShallow(cwd)) return true;
+  const grafts = await tryGit(cwd, ["rev-parse", "--git-path", "info/grafts"]);
+  return grafts !== null && fs.existsSync(path.resolve(cwd, grafts.trim()));
+}
+
+/**
+ * A key for "the history and its labels as they are now": HEAD and every ref tip (stash included),
+ * plus whatever else the answer depends on. Null when it cannot be read.
+ */
+async function refStateKey(cwd: string, extra: unknown[]): Promise<string | null> {
+  const tips = await tryGit(cwd, ["for-each-ref", "--format=%(objectname) %(refname)"]);
+  const head = await tryGit(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]);
+  if (tips === null || head === null) return null;
+  // Which branch HEAD is on: switching between two branches at the same commit, or detaching
+  // there, moves no tip but changes the HEAD label (1.10.0 review). Empty when detached.
+  const onBranch = (await tryGit(cwd, ["symbolic-ref", "-q", "HEAD"])) ?? "";
+  // log.* settings (excludeDecoration, showSignature, …) change git log's output without a ref move.
+  const logConfig = (await tryGit(cwd, ["config", "--get-regexp", "^log\\."])) ?? "";
+  return createHash("sha1").update(JSON.stringify([cwd, ...extra, head.trim(), onBranch.trim(), logConfig, tips])).digest("hex");
+}
+
+/**
  * Hashes reachable from `rev` but not from HEAD, at most `cap` of them. Undefined for HEAD's own
  * log (nothing to dim) or when it cannot be computed (unborn HEAD) — callers then dim nothing.
  */
@@ -452,18 +484,11 @@ export async function readOffHeadHashes(cwd: string, rev: ViewRev | undefined, c
   if (cost.skip && cost.calls % RECHECK_EVERY !== 0) return computeOffHeadHashes(cwd, rev, cap);
   // Not cached in a shallow clone: deepening it (fetch --unshallow / --deepen) changes the answer
   // without moving any ref. Nor with grafts, which do the same from a file.
-  if ((await isShallow(cwd)) || (await tryGit(cwd, ["rev-parse", "--git-path", "info/grafts"]).then((p) =>
-    p !== null && fs.existsSync(path.resolve(cwd, p.trim()))))) {
-    return computeOffHeadHashes(cwd, rev, cap);
-  }
+  if (await historyCanChangeUnderRefs(cwd)) return computeOffHeadHashes(cwd, rev, cap);
   const t0 = performance.now();
-  const tips = await tryGit(cwd, ["for-each-ref", "--format=%(objectname) %(refname)"]);
-  const head = await tryGit(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"]);
   // The order of a picked list does not change the answer.
   const revKey = Array.isArray(rev) ? [...new Set(rev)].sort() : rev;
-  const key = tips === null || head === null
-    ? null
-    : createHash("sha1").update(JSON.stringify([cwd, revKey, cap, head.trim(), tips])).digest("hex");
+  const key = await refStateKey(cwd, [revKey, cap]);
   cost.keyMs = offHeadClock.ms("key", t0);
   if (key !== null && offHeadCache.has(key)) {
     const hit = offHeadCache.get(key);
@@ -483,6 +508,9 @@ export async function readOffHeadHashes(cwd: string, rev: ViewRev | undefined, c
   return result;
 }
 
+/** 41 bytes a hash: room for well over the panel's 100,000 cap (4 MB would barely hold it). */
+const OFF_HEAD_BUFFER = 16 * 1024 * 1024;
+
 async function computeOffHeadHashes(cwd: string, rev: ViewRev | undefined, cap: number): Promise<Set<string> | undefined> {
   // --topo-order matches the graph's order, so at the cap it is the oldest rows that go undimmed.
   // The trailing "--" keeps a file named HEAD (or like a branch) from being read as a path.
@@ -490,11 +518,11 @@ async function computeOffHeadHashes(cwd: string, rev: ViewRev | undefined, cap: 
   let out: string | null;
   if (Array.isArray(rev)) {
     if (rev.length === 0) return undefined;
-    out = await tryGit(cwd, [...base, "--stdin", "--not", "HEAD", "--"], viewRevInput(rev));
+    out = await tryGit(cwd, [...base, "--stdin", "--not", "HEAD", "--"], viewRevInput(rev), OFF_HEAD_BUFFER);
   } else {
     const target = rev?.trim();
     if (!target) return undefined;
-    out = await tryGit(cwd, [...base, ...revArgs(target), "--not", "HEAD", "--"]);
+    out = await tryGit(cwd, [...base, ...revArgs(target), "--not", "HEAD", "--"], undefined, OFF_HEAD_BUFFER);
   }
   if (out === null) return undefined;
   return new Set(out.split("\n").map((s) => s.trim()).filter(Boolean));
@@ -520,7 +548,84 @@ async function hashHitRows(cwd: string, q: string): Promise<GitCommitRow[]> {
   return hit;
 }
 
+/**
+ * Graph rows, a page at a time. git sorts the whole history (--topo-order) before it prints the
+ * first row, so each page used to cost as much as the whole walk — and the panel asks again for
+ * every page as you scroll (200, 400, … 5,000): up to 30 s in a large repository without a
+ * commit-graph file (1.10.0). Now the first page is read as asked; from the second page on, rows
+ * are read ahead in growing steps (READ_AHEAD) and later pages are cut from them while HEAD and
+ * every ref tip stay as they were. Most people never scroll past the first step, so they never
+ * pay for a longer read.
+ */
+const READ_AHEAD = [5000, 10000, 20000, 50000];
+/** Cached rows kept in all (a 50,000-row read is about 12 MB as JSON); the oldest go first. Tests lower it. */
+export const pageCacheLimit = { rows: 100000 };
+type CachedRows = { rows: GitCommitRow[]; asked: number };
+const pageCache = new Map<string, CachedRows>();
+
+/** Test hooks: forget the cached pages; how many pages were cut from the cache / read from git. */
+export const pageCacheStats = { hits: 0, reads: 0 };
+export function resetPageCache(): void {
+  pageCache.clear();
+  pageCacheStats.hits = 0;
+  pageCacheStats.reads = 0;
+}
+
 export async function readRecentCommits(
+  cwd: string,
+  limit: number,
+  rev?: ViewRev,
+  pathFilter?: string,
+  query?: string,
+  mergesMode?: MergesMode,
+): Promise<GitCommitRow[]> {
+  const firstPage = limit <= 200;
+  // An @author search goes through .mailmap, a working-tree file no ref move reflects.
+  const byAuthor = (query?.trim() ?? "").startsWith("@");
+  if (firstPage || byAuthor || (await historyCanChangeUnderRefs(cwd))) {
+    return computeRecentCommits(cwd, limit, rev, pathFilter, query, mergesMode);
+  }
+  // A picked list's order and repeats do not change the rows (git walks them as one set).
+  const revKey = Array.isArray(rev) ? [...new Set(rev)].sort() : rev ?? "";
+  const key = await refStateKey(cwd, ["page", revKey, pathFilter?.trim() ?? "", query?.trim() ?? "", mergesMode ?? ""]);
+  const hit = key === null ? undefined : pageCache.get(key);
+  // Enough rows, or fewer than asked for back then: the history has no more.
+  if (hit && (hit.rows.length >= limit || hit.rows.length < hit.asked)) {
+    pageCache.delete(key as string); // most recently used goes last
+    pageCache.set(key as string, hit);
+    pageCacheStats.hits++;
+    return hit.rows.slice(0, limit);
+  }
+  pageCacheStats.reads++;
+  const asked = READ_AHEAD.find((n) => n >= limit) ?? limit;
+  // The rows are shared with later cut pages, not copied: the panel marks `offHead` on them, which
+  // depends only on HEAD and the refs — both in the key. Copy them if that ever changes.
+  let rows: GitCommitRow[];
+  try {
+    rows = await computeRecentCommits(cwd, asked, rev, pathFilter, query, mergesMode);
+  } catch (e) {
+    // Reading ahead is an optimisation: if the larger read fails, answer what was asked.
+    if (asked === limit) throw e;
+    return computeRecentCommits(cwd, limit, rev, pathFilter, query, mergesMode);
+  }
+  if (key !== null) {
+    pageCache.delete(key);
+    pageCache.set(key, { rows, asked });
+    let total = 0;
+    for (const v of pageCache.values()) total += v.rows.length;
+    // Drop the least recently used until the rest fit; the newest stays even if it alone is larger.
+    for (const [k, v] of pageCache) {
+      if (total <= pageCacheLimit.rows || k === key) break;
+      pageCache.delete(k);
+      total -= v.rows.length;
+    }
+  }
+  return rows.slice(0, limit);
+}
+
+const LOG_BUFFER = 128 * 1024 * 1024;
+
+async function computeRecentCommits(
   cwd: string,
   limit: number,
   rev?: ViewRev,
@@ -572,7 +677,9 @@ export async function readRecentCommits(
     // stop with "ambiguous argument".
     logArgs.push("--");
   }
-  const rows = parseCommitRows(await execGit(cwd, logArgs, { input }));
+  // 50,000 rows of a real repository are ~9 MB (VS Code's); long subjects go well past the 10 MB
+  // default, and a full buffer failed the whole graph (1.10.0 review).
+  const rows = parseCommitRows(await execGit(cwd, logArgs, { input, maxBuffer: LOG_BUFFER }));
 
   // A hex query may be a commit hash — `--grep` only searches messages, so look the hash up
   // directly and put that commit first (deduplicated if its message also matched).

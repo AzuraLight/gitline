@@ -42,6 +42,7 @@ import {
   type StashActionId,
 } from "./gitPanelActions";
 import { getCommitGraphWebviewUi, getWebviewHtmlLang } from "./nls";
+import { shouldSuggest, writeCommitGraph, type HintStore } from "./commitGraphHint";
 import { handleWorkMessage, WORK_WRITE_MESSAGES, type WorkMessage } from "./workTreePanel";
 import { readConflictedFiles, readPausedKind, readPausedOp, runPausedStep, type PausedKind, type PausedStep } from "./pausedOp";
 import {
@@ -66,9 +67,11 @@ function readFileViewPref(): "list" | "tree" {
   return extContext?.workspaceState.get<string>(FILE_VIEW_KEY) === "tree" ? "tree" : "list";
 }
 /** Upper bound for one graph request — the webview pages up to this in steps as you scroll. */
-const MAX_GRAPH_COMMITS = 5000;
+const MAX_GRAPH_COMMITS = 50000;
 /** Most commits looked up as "not on HEAD"; beyond that, older off-HEAD commits are just not dimmed. */
-const OFF_HEAD_CAP = 20000;
+// 1.10.0: was 20,000 — the VS Code repository alone has 27,000 commits off its main branch, so the
+// oldest went undimmed and the current-branch tint switched off. 100,000 cost no more (0.13 s).
+const OFF_HEAD_CAP = 100000;
 
 /**
  * The selection the latest graph reply showed — what "Save Current View as Default" stores. Null
@@ -122,10 +125,11 @@ export function readDisplayPrefs(): DisplayPrefs {
     dateFormat: c.get("dateFormat"),
     detailsLocation: c.get("detailsLocation"),
     highlightCurrentBranch: c.get("highlightCurrentBranch"),
+    messageAlignment: c.get("messageAlignment"),
   };
 }
 
-const DISPLAY_KEYS = ["columns", "dateFormat", "detailsLocation", "highlightCurrentBranch"];
+const DISPLAY_KEYS = ["columns", "dateFormat", "detailsLocation", "highlightCurrentBranch", "messageAlignment"];
 
 /** Display settings changed: the open panel restyles at once, without reading git again. */
 function applyDisplayConfigChange(ev: vscode.ConfigurationChangeEvent): void {
@@ -540,6 +544,69 @@ async function copyToClipboard(text: string): Promise<void> {
   void vscode.window.setStatusBarMessage(vscode.l10n.t("Copied to clipboard"), 1500);
 }
 
+async function timedLog<T>(run: () => Promise<T>, done: (ms: number) => void): Promise<T> {
+  const t0 = performance.now();
+  const out = await run();
+  done(performance.now() - t0);
+  return out;
+}
+
+const COMMIT_GRAPH_DISMISSED_KEY = "gitline.commitGraphHint.dismissed";
+
+/**
+ * After a slow first load in a repository without git's commit-graph file: offer to write it, as
+ * Visual Studio does. "Don't ask again" is per repository; the setting turns it off everywhere.
+ */
+export async function maybeSuggestCommitGraph(webview: Pick<vscode.Webview, "postMessage">, root: string, loadMs: number): Promise<void> {
+  const ctx = extContext;
+  if (!ctx) return;
+  const store: HintStore = {
+    dismissed: () => ctx.globalState.get<string[]>(COMMIT_GRAPH_DISMISSED_KEY) ?? [],
+    dismiss: (r) => ctx.globalState.update(COMMIT_GRAPH_DISMISSED_KEY, [...new Set([...store.dismissed(), r])]),
+  };
+  const enabled = vscode.workspace.getConfiguration("gitline.performance").get<boolean>("suggestCommitGraph", true);
+  if (!(await shouldSuggest(root, loadMs, enabled, store))) return;
+  const create = vscode.l10n.t("Create Index");
+  const never = vscode.l10n.t("Don't Ask Again for This Repository");
+  const pick = await vscode.window.showInformationMessage(
+    vscode.l10n.t(
+      "Gitline: Loading the history of {0} took {1}s. Git can build its commit-graph index to make it about 10 times faster. It only adds an index file; your history is not changed.",
+      path.basename(root),
+      (loadMs / 1000).toFixed(1),
+    ),
+    create,
+    never,
+  );
+  if (pick === never) {
+    await store.dismiss(root);
+    return;
+  }
+  if (pick !== create) return;
+  try {
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t("Gitline: Building the commit-graph index…"), cancellable: true },
+      (_p, token) => {
+        const abort = new AbortController();
+        token.onCancellationRequested(() => abort.abort());
+        return writeCommitGraph(root, abort.signal);
+      },
+    );
+  } catch (e: unknown) {
+    if ((e as { name?: string })?.name === "AbortError" || /aborted/i.test(errorMessage(e))) return;
+    void vscode.window.showErrorMessage(vscode.l10n.t("Gitline: Could not build the commit-graph index: {0}", errorMessage(e)));
+    return;
+  }
+  void vscode.window.setStatusBarMessage(vscode.l10n.t("Gitline: Commit-graph index built."), 3000);
+  // The panel may have been closed or reopened during the build: reload the one shown now, if any.
+  if (shownRoot !== root) return;
+  const target = panelViewRef?.webview ?? webview;
+  try {
+    await target.postMessage({ type: "reloadNow" });
+  } catch {
+    // panel gone
+  }
+}
+
 async function sendGraphPayload(
   webview: vscode.Webview,
   limit: number,
@@ -547,6 +614,8 @@ async function sendGraphPayload(
   pathFilter?: string,
   query?: string,
   mergesMode?: MergesMode,
+  requestId?: number,
+  session?: string,
 ): Promise<void> {
   const seq = ++graphRequestSeq;
   const root = await getActiveRepoRoot();
@@ -555,6 +624,8 @@ async function sendGraphPayload(
       type: "graphError",
       code: "no-repo",
       message: vscode.l10n.t("Gitline: Could not find a Git repository."),
+      requestId,
+      session,
     });
     return;
   }
@@ -592,7 +663,13 @@ async function sendGraphPayload(
     const q = typeof query === "string" && query.trim().length > 0 ? query.trim() : undefined;
     const branch = await readCurrentBranchName(root);
     const [commits, offHead, branchTree, working, stashes, paused, sync, items] = await Promise.all([
-      readRecentCommits(root, capped, logRev, pf, q, mergesMode),
+      timedLog(() => readRecentCommits(root, capped, logRev, pf, q, mergesMode), (ms) => {
+        // Only a plain first page tells how long the history walk takes: a search reads every
+        // message whatever the index, and later pages come from the read-ahead. The time is taken
+        // while the other reads run too, so a cold disk can push it over the line; then the user is
+        // asked once about an index that only helps, and never where one exists.
+        if (capped <= 200 && !pf && !q && seq === graphRequestSeq) void maybeSuggestCommitGraph(webview, root, ms);
+      }),
       readOffHeadHashes(root, logRev, OFF_HEAD_CAP),
       readBranchTreePayload(root),
       readWorkingState(root).catch(() => ({ staged: 0, modified: 0, untracked: 0, conflicted: 0 })),
@@ -609,6 +686,10 @@ async function sendGraphPayload(
     webview.postMessage({
       type: "graphPayload",
       payload: {
+        // The webview's number for the request this answers: it drops a reply older than its
+        // latest request (a slow page landing after a quick search would replace the results).
+        requestId,
+        session,
         repoRoot: root,
         repos: items.map((i) => i.path),
         repoItems: items,
@@ -638,7 +719,7 @@ async function sendGraphPayload(
     });
   } catch (e: unknown) {
     const msg = errorMessage(e);
-    webview.postMessage({ type: "graphError", code: "git", message: msg });
+    webview.postMessage({ type: "graphError", code: "git", message: msg, requestId, session });
   }
 }
 
@@ -978,6 +1059,8 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
         async (msg: {
           type?: string;
           limit?: number;
+          requestId?: number;
+          session?: string;
           hash?: string;
           rev?: string;
           revs?: unknown;
@@ -1065,7 +1148,9 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
               msg.mergesMode === "hide" || msg.mergesMode === "only" || msg.mergesMode === "all"
                 ? msg.mergesMode
                 : undefined;
-            void sendGraphPayload(webview, lim, r, pf, q, mm);
+            const reqId = typeof msg.requestId === "number" ? msg.requestId : undefined;
+            const session = typeof msg.session === "string" ? msg.session : undefined;
+            void sendGraphPayload(webview, lim, r, pf, q, mm, reqId, session);
             return;
           }
           if (msg?.type === "requestCompareFiles" && typeof msg.a === "string" && typeof msg.b === "string") {
