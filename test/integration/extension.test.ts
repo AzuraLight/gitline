@@ -129,6 +129,53 @@ describe("Gitline in VS Code", function () {
     }
   });
 
+  it("1.9.0 working changes: stage, commit with nothing staged (asks), amend, discard only listed files", async () => {
+    const api = vscode.extensions.getExtension<GitlineExports>(EXTENSION_ID)!.exports;
+    const repo = new TempRepo();
+    try {
+      repo.write("a.txt", "1\n");
+      repo.commitAll("base");
+      repo.write("a.txt", "2\n");
+      repo.write("new.txt", "n\n");
+      const types = (posts: Array<Record<string, unknown>>) => posts.map((m) => m.type);
+
+      let posts = await api.workMessage(repo.root, { type: "requestWorkFiles" }, true);
+      const files = posts[0].files as Record<string, Array<{ path: string }>>;
+      assert.deepStrictEqual(files.unstaged.map((f) => f.path), ["a.txt"]);
+      assert.deepStrictEqual(files.untracked.map((f) => f.path), ["new.txt"]);
+
+      // Nothing staged, user says no: nothing happens, the button is released.
+      posts = await api.workMessage(repo.root, { type: "workCommit", message: "all", amend: false }, false);
+      assert.deepStrictEqual(types(posts), ["workSettled"]);
+      assert.strictEqual(repo.git("log", "-1", "--format=%s").trim(), "base");
+      // …says yes: everything is staged and committed.
+      posts = await api.workMessage(repo.root, { type: "workCommit", message: "all changes", amend: false }, true);
+      assert.ok(types(posts).includes("workCommitted"), JSON.stringify(posts));
+      assert.strictEqual(repo.git("log", "-1", "--format=%s").trim(), "all changes");
+      assert.strictEqual(repo.git("status", "--porcelain").trim(), "");
+
+      // Amend keeps the commit count and changes the message.
+      const count = repo.git("rev-list", "--count", "HEAD").trim();
+      await api.workMessage(repo.root, { type: "workCommit", message: "all changes, amended", amend: true }, true);
+      assert.strictEqual(repo.git("rev-list", "--count", "HEAD").trim(), count);
+      assert.strictEqual(repo.git("log", "-1", "--format=%s").trim(), "all changes, amended");
+
+      // Stage takes only listed paths; a path git does not list is ignored, never touched.
+      repo.write("a.txt", "3\n");
+      await api.workMessage(repo.root, { type: "workStage", paths: ["a.txt", "../outside.txt", "missing.txt"] }, true);
+      assert.strictEqual(repo.git("diff", "--cached", "--name-only").trim(), "a.txt");
+      await api.workMessage(repo.root, { type: "workDiscardFile", path: "../../etc/hosts", group: "untracked" }, true);
+      await api.workMessage(repo.root, { type: "workDiscardFile", path: "a.txt", group: "staged" }, true);
+      assert.strictEqual(fs.readFileSync(path.join(repo.root, "a.txt"), "utf8"), "2\n");
+
+      // An empty message is refused with a readable error.
+      posts = await api.workMessage(repo.root, { type: "workCommit", message: "  ", amend: false }, true);
+      assert.ok(posts.some((m) => m.type === "workError"));
+    } finally {
+      repo.dispose();
+    }
+  });
+
   it("refusing to save leaves existing settings untouched, and settings changes do not throw", async () => {
     const config = () => vscode.workspace.getConfiguration("gitline.graph");
     const G = vscode.ConfigurationTarget.Global;

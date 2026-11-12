@@ -9,6 +9,18 @@
     var post = app.post;
     var show = GV.contextMenu.show;
 
+    /** The "Working changes" row: stash, the two discards (both confirmed by the host), Source Control. */
+    function forWorking(x, y) {
+      show(x, y, [
+        { label: UI.workStash || "Stash…", run: function () { post("workStash", {}); } },
+        "-",
+        { label: UI.workDiscardAll || "Discard all changes to tracked files…", danger: true, run: function () { post("workDiscardAll", {}); } },
+        { label: UI.workCleanUntracked || "Delete untracked files…", danger: true, run: function () { post("workClean", {}); } },
+        "-",
+        { label: UI.workOpenScm || "Source Control", run: function () { post("focusScm", {}); } },
+      ]);
+    }
+
     function commitAction(action, hash) {
       return function () { post("commitAction", { action: action, hash: hash }); };
     }
@@ -106,6 +118,6 @@
       ]);
     }
 
-    return { forCommit: forCommit, forLocalBranch: forLocalBranch, forRemoteBranch: forRemoteBranch, forStash: forStash };
+    return { forWorking: forWorking, forCommit: forCommit, forLocalBranch: forLocalBranch, forRemoteBranch: forRemoteBranch, forStash: forStash };
   };
 })(window.GV = window.GV || {});

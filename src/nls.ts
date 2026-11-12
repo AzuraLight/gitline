@@ -76,6 +76,27 @@ export type CommitGraphWebviewUi = {
   revNoMatchNotice: string;
   dismissNoticeTitle: string;
   opBannerAria: string;
+  workStash: string;
+  workOpenScm: string;
+  workMessagePlaceholder: string;
+  workAmend: string;
+  workCommit: string;
+  workAmendButton: string;
+  workConflicted: string;
+  workStaged: string;
+  workUnstaged: string;
+  workUntracked: string;
+  workDeleteFile: string;
+  workDiscardFile: string;
+  workStageFile: string;
+  workUnstageFile: string;
+  workUnstageAll: string;
+  workStageGroup: string;
+  workConflictNote: string;
+  workClean: string;
+  workAmendPushed: string;
+  workDiscardAll: string;
+  workCleanUntracked: string;
   rebaseMessageAria: string;
   rebaseActionAria: string;
   opAbort: string;
@@ -179,6 +200,27 @@ export function getCommitGraphWebviewUi(): CommitGraphWebviewUi {
     revNoMatchNotice: vscode.l10n.t("No branch matches {0} in this repository — showing the default history instead."),
     dismissNoticeTitle: vscode.l10n.t("Dismiss"),
     opBannerAria: vscode.l10n.t("Paused Git operation"),
+    workStash: vscode.l10n.t("Stash…"),
+    workOpenScm: vscode.l10n.t("Source Control"),
+    workMessagePlaceholder: vscode.l10n.t("Commit message (Ctrl/Cmd+Enter to commit)"),
+    workAmend: vscode.l10n.t("Amend last commit"),
+    workCommit: vscode.l10n.t("Commit"),
+    workAmendButton: vscode.l10n.t("Amend"),
+    workConflicted: vscode.l10n.t("Merge conflicts"),
+    workStaged: vscode.l10n.t("Staged"),
+    workUnstaged: vscode.l10n.t("Changes"),
+    workUntracked: vscode.l10n.t("Untracked"),
+    workDeleteFile: vscode.l10n.t("Delete file"),
+    workDiscardFile: vscode.l10n.t("Discard changes"),
+    workStageFile: vscode.l10n.t("Stage"),
+    workUnstageFile: vscode.l10n.t("Unstage"),
+    workUnstageAll: vscode.l10n.t("Unstage all"),
+    workStageGroup: vscode.l10n.t("Stage all"),
+    workConflictNote: vscode.l10n.t("Resolve these in the editor, then stage them."),
+    workClean: vscode.l10n.t("No changes — the working tree is clean."),
+    workAmendPushed: vscode.l10n.t("The last commit is already pushed: amending it means a force push."),
+    workDiscardAll: vscode.l10n.t("Discard all changes to tracked files…"),
+    workCleanUntracked: vscode.l10n.t("Delete untracked files…"),
     rebaseMessageAria: vscode.l10n.t("Commit message"),
     rebaseActionAria: vscode.l10n.t("Action"),
     opAbort: vscode.l10n.t("Abort"),

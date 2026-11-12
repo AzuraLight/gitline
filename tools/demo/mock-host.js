@@ -137,6 +137,27 @@
   var BRANCH_NAMES = ["main", "feature/search", "feature/checkout", "fix/cart-total", "origin/main", "origin/feature/search"];
 
   var display = (window.__GV_DEMO_DISPLAY__) || {};
+  var work = window.__GV_DEMO_WORK__ || {
+    staged: [{ path: "src/main/java/com/acme/shop/checkout/CheckoutService.java", status: "M" }],
+    unstaged: [
+      { path: "src/main/java/com/acme/shop/cart/CartTotal.java", status: "M" },
+      { path: "README.md", status: "M" },
+      { path: "docs/old-setup.md", status: "D" },
+    ],
+    untracked: [{ path: "src/main/resources/messages_ko.properties", status: "?" }],
+    conflicted: [],
+  };
+  function moveWork(paths, from, to) {
+    from.forEach(function (g) {
+      work[g] = work[g].filter(function (f) {
+        if (paths && paths.indexOf(f.path) < 0) return true;
+        if (!work[to].some(function (x) { return x.path === f.path; })) work[to].push({ path: f.path, status: f.status === "?" ? "A" : f.status });
+        return false;
+      });
+    });
+    reply({ type: "workFiles", files: work, canStashStagedOnly: true });
+    reply({ type: "reloadNow" });
+  }
   // A paused merge / rebase / cherry-pick / revert for the banner (set before the page loads).
   var paused = window.__GV_DEMO_PAUSED__ || null;
 
@@ -203,7 +224,7 @@
       branchTree: { current: "main", locals: ["main", "feature/search", "feature/checkout", "fix/cart-total"],
                     remotes: [{ remote: "origin", branches: ["origin/main", "origin/feature/search"] }] },
       stashes: [{ ref: "stash@{0}", subject: "WIP on main: try lazy image loading", parentShort: tips.main.slice(0, 7) }],
-      working: { staged: 1, modified: 3, untracked: 1, conflicted: 0 },
+      working: { staged: work.staged.length, modified: work.unstaged.length, untracked: work.untracked.length, conflicted: work.conflicted.length },
       sync: { upstream: "origin/main", ahead: 2, behind: 0 },
     };
   }
@@ -238,6 +259,29 @@
       reply({ type: "reloadNow" });
     },
     openConflict: function () {},
+    // Working changes (1.9.0): an in-memory index, so stage / unstage / commit can be clicked through.
+    requestWorkFiles: function () { reply({ type: "workFiles", files: work, canStashStagedOnly: true }); },
+    requestAmendMessage: function () { reply({ type: "amendMessage", message: "Tighten CORS for the admin API", pushed: true }); },
+    workStage: function (m) { moveWork(m.paths, ["unstaged", "untracked"], "staged"); },
+    workUnstage: function (m) { moveWork(m.paths, ["staged"], "unstaged"); },
+    workStageAll: function () { moveWork(null, ["unstaged", "untracked"], "staged"); },
+    workUnstageAll: function () { moveWork(null, ["staged"], "unstaged"); },
+    workCommit: function (m) {
+      if (!work.staged.length && !m.amend) {
+        reply({ type: "workError", message: "There are no changes to commit." });
+      } else {
+        work.staged = [];
+        reply({ type: "workCommitted" });
+      }
+      reply({ type: "workSettled" });
+      reply({ type: "workFiles", files: work, canStashStagedOnly: true });
+      reply({ type: "reloadNow" });
+    },
+    openWorkDiff: function () {},
+    workStash: function () {},
+    workDiscardAll: function () {},
+    workClean: function () {},
+    workDiscardFile: function () {},
     // Interactive rebase: the commits after the picked one (oldest first) with their full messages.
     requestRebaseCommits: function (m) {
       var sha = String(m.base || "").replace(/\^$/, "");

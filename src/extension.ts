@@ -21,6 +21,7 @@ import {
   writeColumns,
 } from "./panelWebview";
 import type { DisplayPrefs } from "./commitGraphView";
+import { handleWorkMessage } from "./workTreePanel";
 
 /** What `activate` returns. Not a public API — the integration tests read it. */
 export type GitlineExports = {
@@ -39,6 +40,8 @@ export type GitlineExports = {
   displayPrefs(): DisplayPrefs;
   /** What the graph's column-header menu does: write `gitline.graph.columns`. */
   writeColumns(columns: unknown): Promise<void>;
+  /** What the working-changes pane's message does in `root`; confirmations answer `yes`. Returns what was posted back. */
+  workMessage(root: string, msg: Record<string, unknown>, yes: boolean): Promise<Array<Record<string, unknown>>>;
 };
 
 export function activate(context: vscode.ExtensionContext): GitlineExports {
@@ -115,6 +118,11 @@ export function activate(context: vscode.ExtensionContext): GitlineExports {
     addRecentRepo: (root: string) => rememberRecent(root),
     displayPrefs: () => readDisplayPrefs(),
     writeColumns: (columns: unknown) => writeColumns(columns),
+    workMessage: async (root: string, msg: Record<string, unknown>, yes: boolean) => {
+      const posted: Array<Record<string, unknown>> = [];
+      await handleWorkMessage(root, msg, (m) => void posted.push(m as Record<string, unknown>), async () => yes);
+      return posted;
+    },
   };
 }
 

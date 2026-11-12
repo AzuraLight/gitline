@@ -42,6 +42,7 @@ import {
   type StashActionId,
 } from "./gitPanelActions";
 import { getCommitGraphWebviewUi, getWebviewHtmlLang } from "./nls";
+import { handleWorkMessage, WORK_WRITE_MESSAGES, type WorkMessage } from "./workTreePanel";
 import { readConflictedFiles, readPausedKind, readPausedOp, runPausedStep, type PausedKind, type PausedStep } from "./pausedOp";
 import {
   isRebaseInProgress,
@@ -81,7 +82,7 @@ let shownRoot: string | null = null;
 /** Webview messages that change a repository: they must run where the graph on screen points. */
 const WRITE_MESSAGES = new Set([
   "runSync", "commitAction", "branchAction", "stashAction", "createBranchAt", "createTagAt", "renameBranch",
-  "requestRebaseCommits", "applyRebase", "pausedStep",
+  "requestRebaseCommits", "applyRebase", "pausedStep", ...WORK_WRITE_MESSAGES,
 ]);
 
 /**
@@ -1002,6 +1003,8 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
         }) => {
           // Anything that changes a repository must act on the one the graph shows.
           if (typeof msg?.type === "string" && WRITE_MESSAGES.has(msg.type) && !(await shownRepoIsActive(webview))) {
+            // The Commit button waits for an answer: give it one.
+            if (msg.type === "workCommit") void webview.postMessage({ type: "workSettled" });
             return;
           }
           if (msg?.type === "setFileView" && (msg.mode === "list" || msg.mode === "tree")) {
@@ -1034,6 +1037,11 @@ export function registerGitlinePanelWebview(context: vscode.ExtensionContext): v
             (msg.op === "pull" || msg.op === "push" || msg.op === "fetch")
           ) {
             void dispatchSyncOp(webview, msg.op);
+            return;
+          }
+          if (typeof msg?.type === "string" && (msg.type.startsWith("work") || msg.type === "requestWorkFiles" || msg.type === "requestAmendMessage" || msg.type === "openWorkDiff")) {
+            const root = await getActiveRepoRoot();
+            if (root) await handleWorkMessage(root, msg as WorkMessage, (m) => void webview.postMessage(m), confirm);
             return;
           }
           if (msg?.type === "setColumns") {

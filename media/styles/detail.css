@@ -277,3 +277,152 @@
 .gv-shell .gv-detail-files--tree [hidden] {
   display: none;
 }
+
+/* --- Working changes (1.9.0): commit box, file groups with stage / unstage / discard --- */
+
+.gv-shell .gv-work-tools {
+  display: flex;
+  gap: 6px;
+}
+
+.gv-shell .gv-work-commit {
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid var(--gv-line);
+}
+
+.gv-shell .gv-work-message {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 3.6em;
+  resize: vertical;
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 0.92em;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 3px;
+}
+
+.gv-shell .gv-work-message:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.gv-shell .gv-work-commit__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.gv-shell .gv-work-amend {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.86em;
+  color: var(--gv-muted);
+  cursor: pointer;
+}
+
+.gv-shell .gv-work-commit .gv-rebase-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.gv-shell .gv-work-error {
+  margin-top: 6px;
+  white-space: pre-wrap;
+  font-size: 0.86em;
+  color: var(--vscode-errorForeground, var(--vscode-foreground));
+  max-height: 9em;
+  overflow: auto;
+}
+
+.gv-shell .gv-work-error[hidden] {
+  display: none;
+}
+
+.gv-shell .gv-work-group + .gv-work-group {
+  margin-top: 4px;
+}
+
+.gv-shell .gv-work-note {
+  margin: 4px 12px;
+  font-size: 0.84em;
+  color: var(--gv-muted);
+}
+
+.gv-shell .gv-work-file:focus-visible {
+  outline: 1px solid var(--vscode-list-focusOutline, var(--vscode-focusBorder));
+  outline-offset: -1px;
+}
+
+.gv-shell .gv-work-acts {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* Row actions show on hover / focus, like VS Code's Source Control list. */
+.gv-shell .gv-work-file .gv-work-acts {
+  visibility: hidden;
+}
+
+.gv-shell .gv-work-file:hover .gv-work-acts,
+.gv-shell .gv-work-file:focus-within .gv-work-acts {
+  visibility: visible;
+}
+
+.gv-shell .gv-work-act {
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 1.05em;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.gv-shell .gv-work-act:hover {
+  background: var(--vscode-toolbar-hoverBackground, color-mix(in srgb, var(--gv-muted) 18%, transparent));
+}
+
+.gv-shell .gv-work-act:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.gv-shell .gv-work-act--discard:hover {
+  color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.gv-shell .gv-work-path {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gv-shell .gv-work-path__name {
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gv-shell .gv-work-path__dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.88em;
+  color: var(--gv-muted);
+}

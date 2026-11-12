@@ -111,9 +111,14 @@ export async function runGitCommand(cwd: string, args: string[]): Promise<string
   return execGit(cwd, args);
 }
 
-/** Runs `git` with `input` on stdin (e.g. a tag message given as `-F -`). */
-export async function runGitWithInput(cwd: string, args: string[], input: string): Promise<string> {
-  return execGit(cwd, args, { input });
+/** Runs `git` with `input` on stdin (e.g. a tag message given as `-F -`); `timeoutMs` 0 = none. */
+export async function runGitWithInput(cwd: string, args: string[], input: string, timeoutMs = 0): Promise<string> {
+  return execGit(cwd, args, { input, timeoutMs });
+}
+
+/** Runs `git` in the C locale, for output that is parsed by its English wording. */
+export async function runGitC(cwd: string, args: string[]): Promise<string> {
+  return execGit(cwd, args, { env: { LC_ALL: "C", LANG: "C", LANGUAGE: "C" } });
 }
 
 /** Runs `git` without ever opening an editor: GIT_EDITOR=":" makes git keep the message it prepared. */
@@ -495,6 +500,26 @@ async function computeOffHeadHashes(cwd: string, rev: ViewRev | undefined, cap: 
   return new Set(out.split("\n").map((s) => s.trim()).filter(Boolean));
 }
 
+/**
+ * The commit a hex query names, as one row (none if it names nothing), dimmed when HEAD cannot
+ * reach it: found by hash, not by the view's revisions. Only a clear "no" (exit 1) dims; an error,
+ * a timeout, a shallow clone (where git cannot see the whole ancestry) or a branch with no commit
+ * yet leaves it undimmed.
+ */
+async function hashHitRows(cwd: string, q: string): Promise<GitCommitRow[]> {
+  const hash = await resolveCommit(cwd, q);
+  if (!hash) return [];
+  const hit = parseCommitRows(
+    await execGit(cwd, ["log", "--max-count=1", "--decorate=full", `--pretty=format:${COMMIT_FORMAT}`, hash]),
+  );
+  if (!hit.length) return hit;
+  // With no commit on HEAD nothing is dimmed (as in the All branches view then).
+  if ((await revExists(cwd, "HEAD")) && !(await isShallow(cwd))) {
+    if ((await gitExitCode(cwd, ["merge-base", "--is-ancestor", hash, "HEAD"], 10_000)) === 1) hit[0].offHead = true;
+  }
+  return hit;
+}
+
 export async function readRecentCommits(
   cwd: string,
   limit: number,
@@ -513,7 +538,11 @@ export async function readRecentCommits(
   } else if (!target || target === ALL_REFS) {
     // HEAD with no commits yet: HEAD's own log is empty rather than a git error card.
     const headBorn = await revExists(cwd, "HEAD");
-    if (!target && !headBorn) return [];
+    if (!target && !headBorn) {
+      // Nothing to log, but a hash search can still find a commit on another branch.
+      const hq = query?.trim();
+      return hq && looksLikeHash(hq) ? hashHitRows(cwd, hq) : [];
+    }
     if (target) logArgs.push(...revArgs(target, headBorn));
   } else {
     logArgs.push(...revArgs(target));
@@ -550,16 +579,7 @@ export async function readRecentCommits(
   if (q && looksLikeHash(q)) {
     const hash = await resolveCommit(cwd, q);
     if (hash && !rows.some((r) => r.hash === hash)) {
-      const hit = parseCommitRows(
-        await execGit(cwd, ["log", "--max-count=1", "--decorate=full", `--pretty=format:${COMMIT_FORMAT}`, hash]),
-      );
-      // Found by hash, not by the view's revisions: dim it when HEAD cannot reach it, like the
-      // view dims everything else not on the current branch (in HEAD's own view too).
-      // Only a clear "no" (exit 1) dims; an error, a timeout or a shallow clone (where git cannot
-      // see the whole ancestry) leaves it as it was before 1.8.1.
-      if (hit.length && !(await isShallow(cwd))) {
-        if ((await gitExitCode(cwd, ["merge-base", "--is-ancestor", hash, "HEAD"], 10_000)) === 1) hit[0].offHead = true;
-      }
+      const hit = await hashHitRows(cwd, q);
       rows.unshift(...hit);
     }
   }
@@ -689,7 +709,9 @@ export async function readStashFiles(cwd: string, ref: string): Promise<GitCommi
 /** Content of `<path>` at commit `<sha>`. Returns empty string if missing. */
 export async function readBlobAt(cwd: string, sha: string, repoPath: string): Promise<string> {
   try {
-    return await execGit(cwd, ["show", `${sha}:${repoPath}`], { maxBuffer: 16 * 1024 * 1024 });
+    // "INDEX" = the staged version (`git show :path`), for the working-changes diff.
+    const spec = sha === "INDEX" ? `:${repoPath}` : `${sha}:${repoPath}`;
+    return await execGit(cwd, ["show", spec], { maxBuffer: 16 * 1024 * 1024 });
   } catch {
     return "";
   }

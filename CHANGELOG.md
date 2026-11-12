@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.9.0
+
+### Added
+
+- **Commit from the graph.** Click the **Working changes** row and the pane on the right lists the
+  staged, changed, untracked and conflicted files, with a commit message box:
+  - **Stage / unstage** a file (**+** / **−** or Space) or a whole group; click a file for its diff
+    (with the built-in Git extension you can stage selected lines there).
+  - **Commit** (Ctrl/Cmd+Enter). With nothing staged, Gitline offers to stage everything first, as
+    VS Code does. Commit hooks run; when one fails, its output is shown. The first commit of a new
+    repository works too — the row now shows even before there is any commit.
+  - **Amend last commit** fills in that commit's message and asks first when it is already pushed.
+  - The message you are typing survives the refresh after every stage and commit.
+- **Stash** from the pane or the row's right-click menu, with a message: everything including
+  untracked files, tracked files only, or only what is staged (Git 2.35+). If the choice leaves
+  nothing to stash, Gitline says so.
+- **Discard**, each after a confirmation that names what is lost: one file's changes, all changes to
+  tracked files, or untracked files (ignored files stay). Discarding a staged rename brings the old
+  file back; a file that is in no commit yet (new, or `git add -N`) is offered as "delete", never
+  emptied.
+- **Source Control** stays one click away (pane button and right-click menu).
+
+### Changed
+
+- Clicking the Working changes row opens this pane instead of jumping to the Source Control view.
+- Searching by hash on a branch with no commits yet now finds the commit (it showed nothing).
+- Requires Git 2.23 or newer (for `git restore`, and the Skip button of paused cherry-picks and
+  reverts); the README now says so.
+
+### Notes
+
+- Paths are passed to Git as literal names: a file called `*.txt` or `[ab].txt` only ever means
+  itself.
+- Writes run one at a time, so quick clicks never collide on Git's lock file.
+
 ## 1.8.1
 
 ### Fixed

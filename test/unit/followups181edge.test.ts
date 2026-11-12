@@ -242,8 +242,10 @@ describe("1.8.1 edge: hash-search dimming", function () {
       assert.ok(row);
       assert.ok(!row!.offHead, "unborn HEAD: nothing dims");
       const own = await readRecentCommits(repo.root, 50, "", undefined, side.slice(0, 8));
-      // HEAD's own log on an unborn HEAD returns early (pre-1.8.1 behavior): empty, no hash lookup.
-      assert.deepStrictEqual(own, []);
+      // 1.9.0: HEAD's own (empty) log still finds a commit by hash, undimmed like the All view.
+      assert.deepStrictEqual(own.map((r) => r.hash), [side]);
+      assert.ok(!own[0].offHead);
+      assert.deepStrictEqual(await readRecentCommits(repo.root, 50, "", undefined, "not-a-hash"), []);
     } finally {
       repo.dispose();
     }

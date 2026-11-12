@@ -50,7 +50,19 @@ Gitline is a focused alternative to GitLens that puts a real Git graph in the bo
 
 ### Working tree and stashes
 
-- **Working changes** row at the top of the graph when there are uncommitted changes (`3 staged · 5 modified · 2 untracked`). Click to focus the SCM view.
+- **Working changes** row at the top of the graph when there are uncommitted changes (`3 staged · 5 modified · 2 untracked`). Click it to work with them right in the panel:
+  - **Stage and unstage** files one by one (**+** / **−**, or Space) or a whole group; click a file for its diff — with the built-in Git extension you can stage selected lines there too.
+  - **Commit** with a message (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Enter</kbd>). Nothing staged? Gitline offers to commit everything. A failing commit hook shows its output; the very first commit of a repository works too.
+  - **Amend last commit** — fills in its message, and warns first when that commit is already pushed.
+  - **Stash** with a message: all changes with untracked files, tracked files only, or just what is staged (Git 2.35+).
+  - **Discard** one file's changes, all changes to tracked files, or delete untracked files (ignored files are kept) — each after a confirmation that names what goes. A renamed file comes back under its old name; a file that is in no commit is called out as "delete".
+  - **Source Control** is one click away from the pane and from the row's right-click menu.
+
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/work-light.png">
+  <img src="docs/images/work-dark.png" width="640" alt="The working changes pane: a commit message box with Commit and Amend last commit, then the staged, changed and untracked files with stage and discard buttons">
+</picture>
+
 - **Stashes** as their own rows. Click for the file list; right-click for **apply / pop / drop**.
 
 ### Click a commit
@@ -148,6 +160,8 @@ All `gitline.graph.*` settings are window-scoped: set them in user or workspace 
 | Commit graph | ✅ | — | ✅ ($) | ✅ |
 | Right-click branch/commit actions | ✅ | partial | ✅ | ✅ |
 | Working changes + stashes in graph | ✅ | — | partial | — |
+| Stage, commit, amend, stash from the graph | ✅ | — | ✅ | stash only |
+| Continue / Skip / Abort a paused merge, cherry-pick, revert | ✅ | partial | ✅ | — |
 | Search by author / message / SHA | ✅ | partial | ✅ | partial |
 | Interactive rebase (in-panel) | ✅ | — | — | ✅ |
 | Compare two commits | ✅ | partial | ✅ | ✅ |
@@ -159,13 +173,13 @@ All `gitline.graph.*` settings are window-scoped: set them in user or workspace 
 ## Requirements
 
 - VS Code 1.85+
-- Git on `PATH` — in a Remote SSH, WSL or Dev Container window, on the remote side: Gitline runs there, next to your files.
+- Git 2.23 or newer on `PATH` — in a Remote SSH, WSL or Dev Container window, on the remote side: Gitline runs there, next to your files.
 - The built-in Git extension is used when it is available (to list the same repositories as the Source Control view), but it is not required.
 
 ## Limitations
 
-- Working-tree writes (commit / amend / stash push) are delegated to the SCM view, and so is
-  resolving conflicts themselves (Gitline opens the conflicted file for you).
+- Resolving conflicts is left to VS Code's editor and merge editor (Gitline lists the conflicted
+  files and opens them for you); line-by-line staging is left to VS Code's diff editor.
 - A paused `git am` session gets no banner; finish it from the terminal.
 
 ## Contributing

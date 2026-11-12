@@ -100,8 +100,14 @@
       var stashes = payload.stashes || [];
       var count = 0;
       if (w.staged + w.modified + w.untracked + w.conflicted > 0) {
-        root.appendChild(virtualRow("working", UI.workingChanges || "Working changes", formatWorkingSummary(w), graphWidth,
-          function () { app.post("focusScm", {}); }));
+        var work = virtualRow("working", UI.workingChanges || "Working changes", formatWorkingSummary(w), graphWidth,
+          function () { app.actions.showWork(); });
+        work.addEventListener("contextmenu", function (ev) {
+          ev.preventDefault();
+          menus.forWorking(ev.clientX, ev.clientY);
+        });
+        if (S.currentHash === GV.WORK_SELECTION) work.classList.add("gv-virtual-row--selected");
+        root.appendChild(work);
         count++;
       }
       stashes.forEach(function (st) { root.appendChild(stashRow(st, graphWidth)); count++; });
@@ -189,7 +195,15 @@
       activeList = null;
       root.removeAttribute("aria-activedescendant");
       var commits = payload.commits || [];
-      if (!commits.length) return false;
+      if (!commits.length) {
+        // No commit yet, but files to commit: show the working-changes row so the first commit can
+        // be made here. Otherwise the caller shows the "no commits" card.
+        var w = payload.working || {};
+        if (!(w.staged || w.modified || w.untracked || w.conflicted)) return false;
+        renderVirtualRows(payload, METRICS.sidePad * 2 + METRICS.laneW);
+        if (svg) svg.textContent = "";
+        return true;
+      }
 
       var layout = GV.laneLayout.computeLaneLayout(commits);
       var graphWidth = Math.min(METRICS.sidePad * 2 + Math.max(1, layout.totalLanes) * METRICS.laneW, MAX_GRAPH_W);

@@ -54,6 +54,7 @@ const WEBVIEW_MODULES = [
   "contextMenu.js",
   "fileTree.js",
   "detailPane.js",
+  "workPane.js",
   "rebaseEditor.js",
   "menus.js",
   "branchTree.js",

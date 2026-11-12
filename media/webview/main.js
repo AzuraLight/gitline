@@ -91,6 +91,17 @@
 
   var app = { UI: UI, state: S, post: post, saveState: saveState, requestGraph: requestGraph, loadMore: loadMore, actions: {} };
   var detailPane = GV.createDetailPane(app);
+  var workPane = GV.createWorkPane(app, detailPane);
+  /** Click on the "Working changes" row: the commit preparation pane (1.9.0). */
+  app.actions.showWork = function () {
+    document.querySelectorAll(".gv-unified-row--selected, .gv-virtual-row--selected").forEach(function (el) {
+      el.classList.remove("gv-unified-row--selected", "gv-virtual-row--selected");
+      if (el.getAttribute("aria-selected") === "true") el.setAttribute("aria-selected", "false");
+    });
+    var row = document.querySelector(".gv-virtual-row--working");
+    if (row) row.classList.add("gv-virtual-row--selected");
+    workPane.show();
+  };
   var rebaseEditor = GV.createRebaseEditor(app, detailPane);
   var menus = GV.createMenus(app);
   var branchTree = GV.createBranchTree(app, menus);
@@ -448,7 +459,15 @@
     var commits = payload.commits || [];
     S.hasMore = commits.length >= S.limit;
     S.loadingMore = false;
-    detailPane.showHint();
+    // The working-changes pane stays through a reload (each stage / commit reloads the graph):
+    // re-rendering it would drop the caret from the message box. Not across repositories, though.
+    var root = payload.repoRoot || "";
+    if (S.workRoot && root !== S.workRoot) {
+      workPane.reset();
+      if (workPane.isOpen()) S.currentHash = "";
+    }
+    S.workRoot = root;
+    if (!workPane.isOpen()) detailPane.showHint();
     if (!commitList.render(payload)) {
       showEmptyCard(UI.emptyNoCommitsTitle || "", UI.emptyNoCommitsBody || "");
       return;
@@ -566,6 +585,11 @@
     rebaseError: function (d) { rebaseEditor.showError(d.message); },
     rebaseDone: function () { rebaseEditor.close(); },
     // A step's answer. When the rebase editor's own Abort asked, the answer goes back to the editor.
+    workFiles: function (d) { workPane.setFiles(d); },
+    amendMessage: function (d) { workPane.setAmendMessage(d); },
+    workCommitted: function () { workPane.committed(); },
+    workError: function (d) { workPane.error(d.message); },
+    workSettled: function () { workPane.settled(); },
     opError: function (d) {
       setOpBusy(false);
       if (S.editorAbort) { S.editorAbort = false; rebaseEditor.showError(d.message); return; }

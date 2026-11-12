@@ -2,7 +2,7 @@
   "name": "gitline",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "publisher": "AzuraLight",
   "author": {
     "name": "AzuraLight"
