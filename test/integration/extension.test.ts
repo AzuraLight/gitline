@@ -172,7 +172,7 @@ describe("Gitline in VS Code", function () {
       posts = await api.workMessage(repo.root, { type: "workCommit", message: "  ", amend: false }, true);
       assert.ok(posts.some((m) => m.type === "workError"));
     } finally {
-      repo.dispose();
+      try { repo.dispose(); } catch { /* Windows may still hold a handle */ }
     }
   });
 
