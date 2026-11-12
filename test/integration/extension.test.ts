@@ -246,7 +246,9 @@ describe("Gitline in VS Code", function () {
     } finally {
       win.showInformationMessage = realInfo;
       win.withProgress = realProgress;
-      for (const r of repos) try { r.dispose(); } catch { /* Windows may still hold a handle */ }
+      // One attempt each, no retries: on Windows a held handle made dispose() back off for ~11 s per
+      // repository, and five of them ran past the test timeout. A leftover temp folder is harmless.
+      for (const r of repos) try { fs.rmSync(r.root, { recursive: true, force: true }); } catch { /* still held */ }
     }
   });
 
