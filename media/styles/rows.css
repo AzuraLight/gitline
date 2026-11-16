@@ -283,28 +283,19 @@
 
 /*
  * Narrow commit column: the message wins. Like the column-hiding in other graph tools, the
- * right-hand details drop out in order — author, then time, then the hash — based on the commit
- * cell's own width (it changes with the pane splitters, not only with the window).
+ * right-hand details drop out in order — author, then time, then the hash. The width is the list's
+ * minus the graph's, the same for every row (commitList.js fitColumns): measured per row, rows
+ * starting further right (messages next to their lanes) dropped the author while their
+ * neighbours kept it (1.11.0).
  */
-.gv-shell .gv-unified-commit {
-  container-type: inline-size;
-  container-name: gv-commit;
-}
+.gv-shell .gv-fit-520 .gv-row-right .gv-author { display: none; }
+.gv-shell .gv-fit-520 .gv-ref-chips { max-width: 45%; }
 
-@container gv-commit (max-width: 520px) {
-  .gv-shell .gv-row-right .gv-author { display: none; }
-  .gv-shell .gv-ref-chips { max-width: 45%; }
-}
+.gv-shell .gv-fit-400 .gv-row-right .gv-time { display: none; }
+.gv-shell .gv-fit-400 .gv-ref-chip__remote { display: none; } /* the name needs the room; the tooltip still says it */
 
-@container gv-commit (max-width: 400px) {
-  .gv-shell .gv-row-right .gv-time { display: none; }
-  .gv-shell .gv-ref-chip__remote { display: none; } /* the name needs the room; the tooltip still says it */
-}
-
-@container gv-commit (max-width: 300px) {
-  .gv-shell .gv-row-right { display: none; }
-  .gv-shell .gv-ref-chips { max-width: 40%; }
-}
+.gv-shell .gv-fit-300 .gv-row-right { display: none; }
+.gv-shell .gv-fit-300 .gv-ref-chips { max-width: 40%; }
 
 /* Columns hidden in settings (gitline.graph.columns) or from the column header's menu. */
 .gv-shell.gv-hide-col-author .gv-row-right .gv-author,

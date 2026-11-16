@@ -70,5 +70,44 @@
     return row.after.indexOf(hash);
   }
 
-  return { computeLaneLayout: computeLaneLayout, passthroughTarget: passthroughTarget };
+  var LANE_W = 14;      // a lane's width when the graph fits
+  var MIN_LANE_W = 6;   // narrowest lanes before the graph is cut
+  var SIDE_PAD = 10;
+  var SHARE = 0.4;      // the graph takes at most this much of the list's width
+  var FALLBACK_LIMIT = 220; // list not laid out yet (width 0)
+
+  /**
+   * How the graph fits the list (1.11.0). Large histories run 40–280 lanes wide (VS Code, git), and
+   * a fixed 220 px cap hid 10–64% of the commit nodes. In order: up to SHARE of the list's width;
+   * then narrower lanes, down to MIN_LANE_W; then the graph is cut, and lanes from `edgeLane` on are
+   * drawn in one edge column (their commits as hollow nodes, a dotted line marking the cut).
+   * Returns { laneW, nodeR, sidePad, columns, edgeLane (-1: nothing cut), width }.
+   */
+  function fitLanes(totalLanes, listWidth) {
+    var lanes = Math.max(1, totalLanes);
+    var limit = listWidth > 0 ? Math.floor(listWidth * SHARE) : FALLBACK_LIMIT;
+    // Not even one 6 px lane fits in the share: no graph at all, the text keeps the whole row.
+    if (limit < MIN_LANE_W) {
+      return { laneW: MIN_LANE_W, nodeR: 2, sidePad: 0, columns: 1, edgeLane: lanes > 1 ? 0 : -1, width: 0 };
+    }
+    var pad = SIDE_PAD;
+    // A list so narrow that even one 6 px column and the side padding pass the limit: less
+    // padding, then a thinner column, so the graph never takes more than its share (1.11.0 review).
+    if (limit < pad * 2 + MIN_LANE_W) pad = Math.max(0, Math.floor((limit - MIN_LANE_W) / 2));
+    var avail = limit - pad * 2; // >= MIN_LANE_W: the padding gave way above
+    var laneW = LANE_W, columns = lanes, edgeLane = -1;
+    if (lanes * LANE_W > avail) {
+      laneW = Math.floor(avail / lanes);
+      if (laneW < MIN_LANE_W) {
+        laneW = Math.min(MIN_LANE_W, avail);
+        columns = Math.max(1, Math.floor(avail / laneW));
+        if (columns < lanes) edgeLane = columns - 1;
+        else columns = lanes;
+      }
+    }
+    var nodeR = Math.max(2, Math.min(5, Math.round(laneW * 0.36)));
+    return { laneW: laneW, nodeR: nodeR, sidePad: pad, columns: columns, edgeLane: edgeLane, width: pad * 2 + columns * laneW };
+  }
+
+  return { computeLaneLayout: computeLaneLayout, passthroughTarget: passthroughTarget, fitLanes: fitLanes };
 });

@@ -130,6 +130,28 @@ with sync_playwright() as p:
     page2.evaluate("() => GV.display.set(Object.assign({}, GV.display.get(), { messageAlignment: 'lane' }))")
     page2.wait_for_timeout(200)
     check("back to lane alignment", page2.evaluate(LEFTS) == lefts)
+    # 1.11.0: the right-hand details drop out for the whole list, not row by row.
+    AUTHORS = "() => [...document.querySelectorAll('.gv-commit-log-row .gv-author')].map(a => getComputedStyle(a).display !== 'none')"
+    for w in (1400, 1100, 900, 760):
+        page2.set_viewport_size({"width": w, "height": 820})
+        page2.wait_for_timeout(300)
+        shown = page2.evaluate(AUTHORS)
+        check(f"width {w}: author shown on every row or on none", len(set(shown)) == 1, shown)
+    # The same thresholds as the container queries this replaced: the commit cell's inner width
+    # (list − graph − its 20 px padding) at most 520 hides the author, at most 400 the time.
+    page2.evaluate("() => GV.display.set(Object.assign({}, GV.display.get(), { messageAlignment: 'column' }))")
+    wrong = []
+    for vw in range(1300, 1760, 10):
+        page2.set_viewport_size({"width": vw, "height": 820})
+        page2.wait_for_timeout(120)
+        r = page2.evaluate("""() => { const cell = document.querySelector('.gv-commit-log-row .gv-unified-commit');
+          const cs = getComputedStyle(cell); const inner = cell.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+          const vis = sel => getComputedStyle(document.querySelector('.gv-commit-log-row ' + sel)).display !== 'none';
+          return { inner, author: vis('.gv-author'), time: vis('.gv-time') }; }""")
+        if r["author"] != (r["inner"] > 520) or r["time"] != (r["inner"] > 400):
+            wrong.append((vw, r))
+    check("column alignment: author / time hide at the old inner-width thresholds (520 / 400)", not wrong, wrong[:3])
+    page2.evaluate("() => GV.display.set(Object.assign({}, GV.display.get(), { messageAlignment: 'lane' }))")
     page2.close()
 
     # File history: one straight line with every node, not a lane per commit.
@@ -159,6 +181,39 @@ with sync_playwright() as p:
     sel = page3.evaluate("(document.querySelector('.gv-unified-row--selected') || {}).id || ''")
     check("file history: the parent key follows the line to the next row", sel == "gv-commit-row-4", sel)
     page3.close()
+
+    # 1.11.0: a graph wider than the list's 40% — narrower lanes, then a cut with hollow edge nodes.
+    page4 = b.new_page(viewport={"width": 1400, "height": 820})
+    page4.on("pageerror", lambda e: errors.append(str(e)))
+    page4.add_init_script("""window.addEventListener('message', ev => { if (!ev.data || ev.data.type !== 'graphPayload') return;
+      if (!window.__T) { window.__T = ev.data.payload; return; } if (window.__LOCK && !ev.data.ours) ev.stopImmediatePropagation(); }, true);""")
+    page4.goto(URL)
+    page4.wait_for_function("!!window.__T")
+    page4.evaluate("""() => new Promise(res => {
+      // 120 branches side by side: commit k of branch b, interleaved, so all 120 lanes stay open.
+      const h = (b, k) => ('0000000000000000000000000000000000000000' + (b * 1000 + k).toString(16)).slice(-40);
+      const cs = []; for (let k = 0; k < 20; k++) for (let b = 0; b < 120; b++)
+        cs.push({ hash: h(b, k), shortHash: 'b' + b + 'k' + k, parents: k < 19 ? [h(b, k + 1)] : [], subject: 'branch ' + b + ' commit ' + k, author: 'A', authorEmail: 'a@x', date: '2026-01-01T00:00:00Z', refs: [] });
+      window.__LOCK = true;
+      const pl = Object.assign({}, window.__T, { commits: cs, viewRev: ':all', requestedRevs: [':all'] });
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'graphPayload', payload: pl, ours: true } }));
+      setTimeout(res, 400); })""")
+    FIT = """() => { const svg = document.getElementById('graph-svg'); const box = svg.parentElement.getBoundingClientRect();
+      const inView = el => { const r = el.getBoundingClientRect(); return r.top >= box.top && r.bottom <= box.bottom; };
+      const rows = [...document.querySelectorAll('.gv-commit-log-row')].filter(inView);
+      const nodes = [...svg.querySelectorAll('circle')].filter(c => inView(c) && (c.classList.contains('gv-node-cut') || c.getAttribute('stroke-width') === '2') && !c.classList.contains('gv-node-selected'));
+      return { width: +svg.getAttribute('width'), list: svg.parentElement.clientWidth, rows: rows.length, nodes: nodes.length,
+        cut: svg.querySelectorAll('.gv-node-cut').length, line: svg.querySelectorAll('.gv-graph-cut').length }; }"""
+    f = page4.evaluate(FIT)
+    check("wide graph: no wider than 40% of the list", f["width"] <= f["list"] * 0.4 + 1, f)
+    check("wide graph: every visible row has its node", f["rows"] > 10 and f["nodes"] == f["rows"], f)
+    check("wide graph: lanes past the cut drawn as hollow edge nodes, with the cut line", f["cut"] > 0 and f["line"] > 0, f)
+    page4.set_viewport_size({"width": 2400, "height": 820})
+    page4.wait_for_timeout(500)
+    g = page4.evaluate(FIT)
+    check("a wider list lays the graph out again, wider", g["width"] > f["width"] and g["width"] <= g["list"] * 0.4 + 1, (f["width"], g))
+    check("still a node on every visible row after the resize", g["nodes"] == g["rows"], g)
+    page4.close()
 
     check("no page errors", not errors, errors)
     b.close()

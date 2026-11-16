@@ -3,8 +3,9 @@
   "use strict";
   var u = GV.util;
 
-  var METRICS = { rowH: 30, laneW: 14, nodeR: 5, sidePad: 10 };
-  var MAX_GRAPH_W = 220; // cap so commit text never gets pushed off-screen
+  // Lane width, node size and the cut come from laneLayout.fitLanes per render (1.11.0); these are
+  // the values before any commit is laid out.
+  var METRICS = { rowH: 30, laneW: 14, nodeR: 5, sidePad: 10, edgeLane: -1, columns: 1 };
   var BUFFER = 8;        // rows rendered beyond the viewport on each side
 
   GV.createCommitList = function (app, detailPane, menus) {
@@ -15,6 +16,7 @@
     var canvas = root.parentElement;
     var scrollHandler = null;
     var activeList = null; // the mounted list's selection API (rebuilt on every render)
+    var M = METRICS; // this render's geometry
 
     // ---- Keyboard: the commit list is one listbox ---------------------------------------------
     root.setAttribute("role", "listbox");
@@ -78,12 +80,12 @@
       var r = layout.perRow[i];
       var lanes = Math.max(1, r.before.length, r.after.length, r.lane + 1);
       for (var p = 0; p < r.parentLanes.length; p++) if (r.parentLanes[p] != null) lanes = Math.max(lanes, r.parentLanes[p] + 1);
-      return Math.min(graphWidth, METRICS.sidePad * 2 + lanes * METRICS.laneW);
+      return Math.min(graphWidth, M.sidePad * 2 + Math.min(lanes, M.columns) * M.laneW);
     }
 
     /** Working changes / stash rows: on the first lane in "lane" alignment, centred in the graph otherwise. */
     function virtualLeft(graphWidth) {
-      return laneAligned() ? Math.min(graphWidth, METRICS.sidePad * 2 + METRICS.laneW) : graphWidth;
+      return laneAligned() ? Math.min(graphWidth, M.sidePad * 2 + M.laneW) : graphWidth;
     }
 
     function virtualRow(kind, title, sub, graphWidth, onClick) {
@@ -192,6 +194,20 @@
       return cell;
     }
 
+    /**
+     * Which right-hand details fit (rows.css .gv-fit-*): from the list's width minus the graph's,
+     * once for all rows, so every row shows the same columns.
+     */
+    var FIT_STEPS = [520, 400, 300];
+    var CELL_PAD = 20;
+    function fitColumns(graphWidth) {
+      if (!canvas) return;
+      // The commit cell's own padding (rows.css .gv-unified-commit: 8 px + 12 px) is not room for
+      // text: the container queries this replaced measured inside it (1.11.0 review).
+      var w = canvas.clientWidth - graphWidth - CELL_PAD;
+      FIT_STEPS.forEach(function (n) { root.classList.toggle("gv-fit-" + n, canvas.clientWidth > 0 && w <= n); });
+    }
+
     var graphRows = null; // what the svg is drawn from, and which rows it holds now
     var GRAPH_MARGIN = 150; // rows drawn beyond the visible ones on each side
 
@@ -214,7 +230,7 @@
       svg.style.top = graphOffset + "px";
       var commitIndex = {};
       commits.forEach(function (c, i) { commitIndex[c.hash] = i; });
-      GV.graphSvg.draw(svg, commits, layout, commitIndex, METRICS);
+      GV.graphSvg.draw(svg, commits, layout, commitIndex, M);
       graphRows = { commits: commits, layout: layout, index: commitIndex, from: -1, to: -1 };
     }
 
@@ -228,10 +244,11 @@
       if (from >= gr.from && to <= gr.to) return;
       gr.from = Math.max(0, from - GRAPH_MARGIN);
       gr.to = Math.min(gr.commits.length - 1, to + GRAPH_MARGIN);
-      GV.graphSvg.drawRows(svg, gr.commits, gr.layout, gr.index, METRICS, gr.from, gr.to);
+      GV.graphSvg.drawRows(svg, gr.commits, gr.layout, gr.index, M, gr.from, gr.to);
     }
 
     var lastPayload = null;
+    var layoutCache = null; // { payload, drawn, layout } of the last render
 
     /** Each commit's parent is the next row; the last keeps its first real parent (more to load). */
     function linearHistory(commits) {
@@ -264,6 +281,7 @@
         // be made here. Otherwise the caller shows the "no commits" card.
         var w = payload.working || {};
         if (!(w.staged || w.modified || w.untracked || w.conflicted)) return false;
+        M = METRICS;
         renderVirtualRows(payload, METRICS.sidePad * 2 + METRICS.laneW);
         if (svg) svg.textContent = "";
         graphRows = null;
@@ -275,12 +293,25 @@
       // not) are not in the list, so every row opened a lane that never closed — a wall of lines and
       // no nodes. git cannot rewrite parents under --follow, so the graph links each commit to the
       // next one listed: one straight line, as other file-history views show it.
-      var drawn = payload.pathFilter ? linearHistory(commits) : commits;
-      var layout = GV.laneLayout.computeLaneLayout(drawn);
-      var graphWidth = Math.min(METRICS.sidePad * 2 + Math.max(1, layout.totalLanes) * METRICS.laneW, MAX_GRAPH_W);
+      // The same payload laid out again (the list was resized, the alignment changed): reuse its
+      // lane layout — 60–80 ms for 50,000 rows, paid on every step of a splitter drag otherwise.
+      var drawn, layout;
+      if (layoutCache && layoutCache.payload === payload) {
+        drawn = layoutCache.drawn;
+        layout = layoutCache.layout;
+      } else {
+        drawn = payload.pathFilter ? linearHistory(commits) : commits;
+        layout = GV.laneLayout.computeLaneLayout(drawn);
+        layoutCache = { payload: payload, drawn: drawn, layout: layout };
+      }
+      // Up to 40% of the list's width, narrower lanes, then a cut (laneLayout.fitLanes).
+      var fit = GV.laneLayout.fitLanes(layout.totalLanes, canvas ? canvas.clientWidth : 0);
+      M = { rowH: METRICS.rowH, laneW: fit.laneW, nodeR: fit.nodeR, sidePad: fit.sidePad, edgeLane: fit.edgeLane, columns: fit.columns, width: fit.width };
+      var graphWidth = fit.width;
       var graphOffset = renderVirtualRows(payload, graphWidth) * METRICS.rowH;
       drawGraph(drawn, layout, graphWidth, graphOffset);
       if (canvas) canvas.style.setProperty("--gv-graph-w", graphWidth + "px");
+      fitColumns(graphWidth);
       mountVirtualList(commits, drawn, layout, graphWidth, graphOffset, !!payload.onHeadKnown);
       return true;
     }
@@ -318,7 +349,7 @@
           rendered[i].setAttribute("aria-selected", "true");
           root.setAttribute("aria-activedescendant", rendered[i].id);
         }
-        GV.graphSvg.highlightNode(svg, layout.perRow[i].lane, i, METRICS);
+        GV.graphSvg.highlightNode(svg, layout.perRow[i].lane, i, M);
         detailPane.showCommit(c);
       }
 
@@ -428,14 +459,30 @@
       if (canvas) canvas.addEventListener("scroll", scrollHandler, { passive: true });
       // A panel shown again, or made taller, fires no scroll: bring the rows and graph up to date.
       if (canvas && typeof ResizeObserver !== "undefined") {
-        resizeObserver = new ResizeObserver(function () { scrollHandler(); });
+        var refitPending = false;
+        resizeObserver = new ResizeObserver(function () {
+          // A wider or narrower list changes how the graph fits: lay it out again when it does —
+          // at most once a frame while a splitter is dragged.
+          var f = GV.laneLayout.fitLanes(layout.totalLanes, canvas.clientWidth);
+          if (lastPayload && (f.laneW !== M.laneW || f.edgeLane !== M.edgeLane || f.columns !== M.columns || f.sidePad !== M.sidePad || f.width !== M.width)) {
+            if (refitPending) return;
+            refitPending = true;
+            window.requestAnimationFrame(function () {
+              refitPending = false;
+              if (lastPayload && activeList) render(lastPayload);
+            });
+            return;
+          }
+          fitColumns(graphWidth); // a splitter moved: the same graph, more or less room for text
+          scrollHandler();
+        });
         resizeObserver.observe(canvas);
       }
       update();
       // Drawing cleared the svg: put the selected commit's ring back (any re-render, e.g. a change
       // of message alignment, not just the one main.js follows with reopening the commit).
       var sel = selectedIndex();
-      if (sel >= 0) GV.graphSvg.highlightNode(svg, layout.perRow[sel].lane, sel, METRICS);
+      if (sel >= 0) GV.graphSvg.highlightNode(svg, layout.perRow[sel].lane, sel, M);
     }
 
     function clear() {

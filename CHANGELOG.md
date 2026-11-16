@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.11.0
+
+### Fixed
+
+- **Every commit has its dot in wide graphs.** The graph was capped at 220 px (about 15 lanes), so
+  in large repositories many commits had no visible node: 12% in the VS Code repository's own
+  history and 64% in Git's, where 40 to 280 branches run side by side. The graph now takes up to
+  40% of the list's width, then narrows its lanes (down to 6 px), and only then cuts: lanes past
+  the cut share the last column, their commits drawn as hollow dots, with a dotted line marking the
+  cut. The graph is fitted again when the panel is resized.
+- **Author, date and hash drop out for the whole list at once.** Since messages start next to their
+  lanes (1.10.0), each row had a different width left, so the author showed on some rows and not on
+  their neighbours. The columns that fit are now decided once from the list's width, at the same
+  widths as before.
+
+### Changed
+
+- README screenshots and animations re-recorded with messages next to their lanes.
+
 ## 1.10.0
 
 A release about the graph itself: large repositories stay fast, and messages sit next to their

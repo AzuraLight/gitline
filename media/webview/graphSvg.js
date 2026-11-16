@@ -4,11 +4,20 @@
   var SVG_NS = "http://www.w3.org/2000/svg";
   var laneColor = GV.util.laneColor;
 
-  /** Geometry shared by drawing and the selection ring. */
+  /**
+   * Geometry shared by drawing and the selection ring. m.edgeLane >= 0 when the graph is cut
+   * (laneLayout.fitLanes): lanes from it on share the edge column.
+   */
   function geometry(m) {
+    var edge = m.edgeLane != null ? m.edgeLane : -1;
+    function cut(idx) { return edge >= 0 && idx >= edge; }
     return {
-      laneX: function (idx) { return m.sidePad + idx * m.laneW + m.laneW / 2; },
+      laneX: function (idx) { return m.sidePad + (cut(idx) ? edge : idx) * m.laneW + m.laneW / 2; },
       rowY: function (idx) { return idx * m.rowH + m.rowH / 2; },
+      /** In the edge column, past the cut. */
+      cut: cut,
+      /** A line between two lanes both past the cut is not drawn: it would run inside the edge column. */
+      hidden: function (a, b) { return cut(a) && cut(b); },
     };
   }
 
@@ -44,11 +53,11 @@
         var hash = lp.before[L];
         if (!hash) continue;
         if (hash === commits[i].hash) {
-          addPath(svg, pathCurve(g.laneX(L), cy - m.rowH / 2, g.laneX(lp.lane), cy), laneColor(L), 0.95);
+          if (!g.hidden(L, lp.lane)) addPath(svg, pathCurve(g.laneX(L), cy - m.rowH / 2, g.laneX(lp.lane), cy), laneColor(L), 0.95);
           continue;
         }
         var newL = GV.laneLayout.passthroughTarget(lp, L);
-        if (newL === -1) continue;
+        if (newL === -1 || g.hidden(L, newL)) continue;
         addPath(svg, pathCurve(g.laneX(L), cy - m.rowH / 2, g.laneX(newL), cy + m.rowH / 2), laneColor(newL), 0.85);
       }
     }
@@ -63,7 +72,7 @@
       var parents = commits[i].parents || [];
       for (var pi = 0; pi < parents.length; pi++) {
         var pLane = lp.parentLanes[pi];
-        if (pLane == null) continue;
+        if (pLane == null || g.hidden(lp.lane, pLane)) continue;
         var px = g.laneX(pLane);
         var step = pathCurve(cx, cy, px, cy + m.rowH / 2);
         if (commitIndex[parents[pi]] == null) {
@@ -87,7 +96,7 @@
       var parents = commits[i].parents || [];
       for (var pi = 0; pi < parents.length; pi++) {
         var pLane = layout.perRow[i].parentLanes[pi];
-        if (pLane == null || commitIndex[parents[pi]] != null) continue;
+        if (pLane == null || commitIndex[parents[pi]] != null || g.cut(pLane)) continue;
         if (!(pLane in firstStart)) firstStart[pLane] = i;
       }
     }
@@ -107,7 +116,17 @@
       var color = laneColor(lane);
       var cx = g.laneX(lane), cy = g.rowY(i);
       var off = !!commits[i].offHead; // not on HEAD: the node fades with its row's text
-      svg.appendChild(svgEl("circle", { cx: cx, cy: cy, r: m.nodeR + 3, fill: color, opacity: off ? "0.08" : "0.18" }));
+      if (g.cut(lane)) {
+        // Past the cut: a hollow node in the edge column, so every commit still has its dot.
+        svg.appendChild(svgEl("circle", {
+          class: "gv-node-cut", cx: cx, cy: cy, r: m.nodeR, fill: "var(--vscode-editor-background)",
+          stroke: color, "stroke-width": 1.5, opacity: off ? "0.5" : "1",
+        }));
+        continue;
+      }
+      // The soft halo stays inside its lane once lanes are narrowed (1.11.0 review); at full width as before.
+      var halo = m.laneW >= 14 ? m.nodeR + 3 : Math.min(m.nodeR + 3, m.laneW / 2);
+      svg.appendChild(svgEl("circle", { cx: cx, cy: cy, r: halo, fill: color, opacity: off ? "0.08" : "0.18" }));
       var node = {
         cx: cx, cy: cy, r: m.nodeR, fill: color,
         stroke: "var(--vscode-editor-background)", "stroke-width": 2,
@@ -115,6 +134,33 @@
       if (off) node["fill-opacity"] = "0.45";
       svg.appendChild(svgEl("circle", node));
     }
+  }
+
+  /**
+   * The cut: a faint dotted line in the edge column over every stretch of rows where lanes run
+   * past it. One path per stretch.
+   */
+  function drawCut(svg, layout, g, m, from, to) {
+    if (m.edgeLane == null || m.edgeLane < 0) return;
+    var x = g.laneX(m.edgeLane) + m.laneW / 2;
+    // With no side padding left (a very narrow list) that is the svg's right edge: keep the 1 px line inside.
+    if (m.width != null) x = Math.min(x, m.width - 0.5);
+    var start = -1;
+    function flush(end) {
+      if (start < 0) return;
+      svg.appendChild(svgEl("path", {
+        class: "gv-graph-cut", d: "M " + x + " " + (start * m.rowH) + " L " + x + " " + (end * m.rowH),
+        stroke: "var(--vscode-descriptionForeground)", "stroke-width": 1, "stroke-dasharray": "1 3", opacity: 0.7, fill: "none",
+      }));
+      start = -1;
+    }
+    for (var i = from; i <= to; i++) {
+      var r = layout.perRow[i];
+      var past = r.before.length > m.edgeLane || r.after.length > m.edgeLane || r.lane >= m.edgeLane;
+      if (past && start < 0) start = i;
+      if (!past) flush(i);
+    }
+    flush(to + 1);
   }
 
   function layer(svg, cls) {
@@ -137,7 +183,7 @@
     layer(svg, "gv-graph-rows");
   }
 
-  /** Draws rows from..to (inclusive), replacing the rows drawn before. m = { rowH, laneW, nodeR, sidePad } */
+  /** Draws rows from..to (inclusive), replacing the rows drawn before. m = { rowH, laneW, nodeR, sidePad, edgeLane } */
   function drawRows(svg, commits, layout, commitIndex, m, from, to) {
     var rows = layer(svg, "gv-graph-rows");
     rows.textContent = "";
@@ -150,6 +196,7 @@
     drawTails(frag, commits, layout, commitIndex, g, m, from, to);
     drawPassthroughs(frag, commits, layout, g, m, from, to);
     drawParentEdges(frag, commits, layout, commitIndex, g, m, from, to);
+    drawCut(frag, layout, g, m, from, to);
     drawNodes(frag, commits, layout, g, m, from, to);
     while (frag.firstChild) rows.appendChild(frag.firstChild);
   }
